@@ -23,7 +23,6 @@
 #include <optional>
 #include <algorithm>
 #include <memory>
-#include <chrono>
 //#include <mutex>
 
 // WIN32_LEAN_AND_MEAN is defined to avoid including commdlg.h
@@ -39,6 +38,7 @@
 #include <shlobj.h>
 #include <shellapi.h>
 
+#define DebugCopyAsRichTextFormat		0
 #define DebugDragAndDropDataFormat		0
 #define MaxDragAndDropDataFormatCount	6
 /*
@@ -52,6 +52,7 @@ Used by VSCode, Atom etc.
 */
 #define Enable_ChromiumWebCustomMIMEDataFormat	0
 
+#include "ParallelSupport.h"
 #include "ScintillaTypes.h"
 #include "ScintillaMessages.h"
 #include "ScintillaStructures.h"
@@ -89,7 +90,7 @@ Used by VSCode, Atom etc.
 #include "MarginView.h"
 #include "EditView.h"
 #include "Editor.h"
-#include "ElapsedPeriod.h"
+//#include "ElapsedPeriod.h"
 
 #include "AutoComplete.h"
 #include "ScintillaBase.h"
@@ -208,7 +209,6 @@ class FormatEnumerator final : public IEnumFORMATETC {
 
 public:
 	FormatEnumerator(ULONG pos_, const CLIPFORMAT formats_[], size_t formatsLen_);
-	virtual ~FormatEnumerator() = default;
 
 	// IUnknown
 	STDMETHODIMP QueryInterface(REFIID riid, PVOID *ppv) noexcept override;
@@ -227,8 +227,6 @@ public:
 class DropSource final : public IDropSource {
 public:
 	ScintillaWin *sci = nullptr;
-	DropSource() noexcept = default;
-	virtual ~DropSource() = default;
 
 	// IUnknown
 	STDMETHODIMP QueryInterface(REFIID riid, PVOID *ppv) noexcept override;
@@ -245,8 +243,6 @@ public:
 class DataObject final : public IDataObject {
 public:
 	ScintillaWin *sci = nullptr;
-	DataObject() noexcept = default;
-	virtual ~DataObject() = default;
 
 	// IUnknown
 	STDMETHODIMP QueryInterface(REFIID riid, PVOID *ppv) noexcept override;
@@ -270,8 +266,6 @@ public:
 class DropTarget final : public IDropTarget {
 public:
 	ScintillaWin *sci = nullptr;
-	DropTarget() noexcept = default;
-	virtual ~DropTarget() = default;
 
 	// IUnknown
 	STDMETHODIMP QueryInterface(REFIID riid, PVOID *ppv) noexcept override;
@@ -286,8 +280,8 @@ public:
 };
 
 // InputLanguage() and SetCandidateWindowPos() are based on Chromium's IMM32Manager and InputMethodWinImm32.
-// https://github.com/chromium/chromium/blob/master/ui/base/ime/win/imm32_manager.cc
-// See License.txt or https://github.com/chromium/chromium/blob/master/LICENSE for license details.
+// https://github.com/chromium/chromium/blob/main/ui/base/ime/win/imm32_manager.cc
+// See License.txt or https://github.com/chromium/chromium/blob/main/LICENSE for license details.
 
 // See Chromium's IMM32Manager::SetInputLanguage()
 LANGID InputLanguage() noexcept {
@@ -434,6 +428,9 @@ class ScintillaWin final :
 #if Enable_ChromiumWebCustomMIMEDataFormat
 	CLIPFORMAT cfChromiumCustomMIME;
 #endif
+#if DebugCopyAsRichTextFormat
+	CLIPFORMAT cfRTF;
+#endif
 
 	// supported drag & drop format
 	CLIPFORMAT dropFormat[MaxDragAndDropDataFormatCount];
@@ -526,17 +523,17 @@ class ScintillaWin final :
 	std::string UTF8FromEncoded(std::string_view encoded) const override;
 	std::string EncodedFromUTF8(std::string_view utf8) const override;
 
-	std::string EncodeWString(std::wstring_view wsv);
+	std::string EncodeWString(std::wstring_view wsv) const;
 	sptr_t DefWndProc(Message iMessage, uptr_t wParam, sptr_t lParam) noexcept override;
 	void IdleWork() override;
 	void QueueIdleWork(WorkItems items, Sci::Position upTo) noexcept override;
 	bool SetIdle(bool on) noexcept override;
 	UINT_PTR timers[static_cast<int>(TickReason::dwell) + 1]{};
-	bool FineTickerRunning(TickReason reason) noexcept override;
+	bool FineTickerRunning(TickReason reason) const noexcept override;
 	void FineTickerStart(TickReason reason, int millis, int tolerance) noexcept override;
 	void FineTickerCancel(TickReason reason) noexcept override;
 	void SetMouseCapture(bool on) noexcept override;
-	bool HaveMouseCapture() noexcept override;
+	bool HaveMouseCapture() const noexcept override;
 	void SetTrackMouseLeaveEvent(bool on) noexcept;
 	void UpdateBaseElements() override;
 	bool SCICALL PaintContains(PRectangle rc) const noexcept override;
@@ -556,8 +553,8 @@ class ScintillaWin final :
 	void NotifyDoubleClick(Point pt, KeyMod modifiers) override;
 	void NotifyURIDropped(const char *list) noexcept;
 	std::unique_ptr<CaseFolder> CaseFolderForEncoding() override;
-	std::string CaseMapString(const std::string &s, CaseMapping caseMapping) override;
-	void Copy(bool asBinary) override;
+	std::string CaseMapString(const std::string &s, CaseMapping caseMapping) const override;
+	void Copy(bool asBinary) const override;
 	bool CanPaste() noexcept override;
 	void Paste(bool asBinary) override;
 	void SCICALL CreateCallTipWindow(PRectangle rc) noexcept override;
@@ -573,8 +570,8 @@ class ScintillaWin final :
 	};
 
 	void GetIntelliMouseParameters() noexcept;
-	void CopyToGlobal(GlobalMemory &gmUnicode, const SelectionText &selectedText, CopyEncoding encoding);
-	void CopyToClipboard(const SelectionText &selectedText) override;
+	void CopyToGlobal(GlobalMemory &gmUnicode, const SelectionText &selectedText, CopyEncoding encoding) const;
+	void CopyToClipboard(const SelectionText &selectedText) const override;
 	void ScrollMessage(WPARAM wParam);
 	void HorizontalScrollMessage(WPARAM wParam);
 	void FullPaint();
@@ -677,6 +674,9 @@ ScintillaWin::ScintillaWin(HWND hwnd) noexcept {
 #endif
 #if Enable_ChromiumWebCustomMIMEDataFormat
 	cfChromiumCustomMIME = GetClipboardFormat(L"Chromium Web Custom MIME Data Format");
+#endif
+#if DebugCopyAsRichTextFormat
+	cfRTF = GetClipboardFormat(L"Rich Text Format");
 #endif
 
 	UINT index = 0;
@@ -958,7 +958,7 @@ inline int WideCharLenFromMultiByte(UINT codePage, std::string_view sv) noexcept
 
 std::string StringEncode(const std::wstring_view wsv, int codePage) {
 	const int cchMulti = wsv.length() ? MultiByteLenFromWideChar(codePage, wsv) : 0;
-	std::string sMulti(cchMulti, 0);
+	std::string sMulti(cchMulti, '\0');
 	if (cchMulti) {
 		MultiByteFromWideChar(codePage, wsv, sMulti.data(), cchMulti);
 	}
@@ -975,6 +975,15 @@ std::wstring StringDecode(const std::string_view sv, int codePage) {
 }
 
 std::wstring StringMapCase(const std::wstring_view wsv, DWORD mapFlags) {
+#if _WIN32_WINNT >= _WIN32_WINNT_VISTA
+	const int charsConverted = ::LCMapStringEx(LOCALE_NAME_USER_DEFAULT, mapFlags,
+		wsv.data(), static_cast<int>(wsv.length()), nullptr, 0, nullptr, nullptr, 0);
+	std::wstring wsConverted(charsConverted, 0);
+	if (charsConverted) {
+		::LCMapStringEx(LOCALE_NAME_USER_DEFAULT, mapFlags,
+			wsv.data(), static_cast<int>(wsv.length()), wsConverted.data(), charsConverted, nullptr, nullptr, 0);
+	}
+#else
 	const int charsConverted = ::LCMapStringW(LOCALE_USER_DEFAULT, mapFlags,
 		wsv.data(), static_cast<int>(wsv.length()), nullptr, 0);
 	std::wstring wsConverted(charsConverted, 0);
@@ -982,6 +991,7 @@ std::wstring StringMapCase(const std::wstring_view wsv, DWORD mapFlags) {
 		::LCMapStringW(LOCALE_USER_DEFAULT, mapFlags,
 			wsv.data(), static_cast<int>(wsv.length()), wsConverted.data(), charsConverted);
 	}
+#endif
 	return wsConverted;
 }
 
@@ -1574,10 +1584,10 @@ UINT ScintillaWin::CodePageOfDocument() const noexcept {
 	return pdoc->dbcsCodePage; // see Message::GetCodePage in Editor.cxx
 }
 
-std::string ScintillaWin::EncodeWString(std::wstring_view wsv) {
+std::string ScintillaWin::EncodeWString(std::wstring_view wsv) const {
 	if (IsUnicodeMode()) {
 		const size_t len = UTF8Length(wsv);
-		std::string putf(len, 0);
+		std::string putf(len, '\0');
 		UTF8FromUTF16(wsv, putf.data(), len);
 		return putf;
 	} else {
@@ -2478,7 +2488,7 @@ sptr_t ScintillaWin::DefWndProc(Message iMessage, uptr_t wParam, sptr_t lParam) 
 	return ::DefWindowProc(MainHWND(), static_cast<unsigned int>(iMessage), wParam, lParam);
 }
 
-bool ScintillaWin::FineTickerRunning(TickReason reason) noexcept {
+bool ScintillaWin::FineTickerRunning(TickReason reason) const noexcept {
 	return timers[static_cast<size_t>(reason)] != 0;
 }
 
@@ -2551,7 +2561,7 @@ void ScintillaWin::SetMouseCapture(bool on) noexcept {
 	capturedMouse = on;
 }
 
-bool ScintillaWin::HaveMouseCapture() noexcept {
+bool ScintillaWin::HaveMouseCapture() const noexcept {
 	// Cannot just see if GetCapture is this window as the scroll bar also sets capture for the window
 	return capturedMouse;
 	//return capturedMouse && (::GetCapture() == MainHWND());
@@ -2571,7 +2581,7 @@ void ScintillaWin::SetTrackMouseLeaveEvent(bool on) noexcept {
 
 void ScintillaWin::UpdateBaseElements() {
 	struct ElementToIndex { Element element; int nIndex; };
-	const ElementToIndex eti[] = {
+	constexpr ElementToIndex eti[] = {
 		{ Element::List, COLOR_WINDOWTEXT },
 		{ Element::ListBack, COLOR_WINDOW },
 		{ Element::ListSelected, COLOR_HIGHLIGHTTEXT },
@@ -2579,7 +2589,9 @@ void ScintillaWin::UpdateBaseElements() {
 	};
 	bool changed = false;
 	for (const ElementToIndex &ei : eti) {
-		changed = vs.SetElementBase(ei.element, ColourRGBA::FromRGB(::GetSysColor(ei.nIndex))) || changed;
+		if (vs.SetElementBase(ei.element, ColourRGBA::FromRGB(::GetSysColor(ei.nIndex)))) {
+			changed = true;
+		}
 	}
 	if (changed) {
 		Redraw();
@@ -2827,10 +2839,9 @@ std::unique_ptr<CaseFolder> ScintillaWin::CaseFolderForEncoding() {
 			std::unique_ptr<CaseFolderTable> pcf = std::make_unique<CaseFolderTable>();
 			// Only for single byte encodings
 			for (int i = 0x80; i < 0x100; i++) {
-				char sCharacter[2] = "A";
-				sCharacter[0] = static_cast<char>(i);
+				const char sCharacter[2] = {static_cast<char>(i), '\0'};
 				wchar_t wCharacter[20];
-				const unsigned int lengthUTF16 = WideCharFromMultiByte(cpDest, sCharacter,
+				const unsigned int lengthUTF16 = WideCharFromMultiByte(cpDest, std::string_view(sCharacter, 1),
 					wCharacter, std::size(wCharacter));
 				if (lengthUTF16 == 1) {
 					const char *caseFolded = CaseConvert(wCharacter[0], CaseConversion::fold);
@@ -2857,7 +2868,7 @@ std::unique_ptr<CaseFolder> ScintillaWin::CaseFolderForEncoding() {
 	}
 }
 
-std::string ScintillaWin::CaseMapString(const std::string &s, CaseMapping caseMapping) {
+std::string ScintillaWin::CaseMapString(const std::string &s, CaseMapping caseMapping) const {
 	if (s.empty() || (caseMapping == CaseMapping::same))
 		return s;
 
@@ -2881,7 +2892,7 @@ std::string ScintillaWin::CaseMapString(const std::string &s, CaseMapping caseMa
 	return sConverted;
 }
 
-void ScintillaWin::Copy(bool asBinary) {
+void ScintillaWin::Copy(bool asBinary) const {
 	//Platform::DebugPrintf("Copy\n");
 	if (!sel.Empty()) {
 		SelectionText selectedText;
@@ -2894,6 +2905,11 @@ void ScintillaWin::Copy(bool asBinary) {
 bool ScintillaWin::CanPaste() noexcept {
 	if (!Editor::CanPaste())
 		return false;
+#if DebugCopyAsRichTextFormat
+	if (::IsClipboardFormatAvailable(cfRTF)) {
+		return true;
+	}
+#endif
 	return ::IsClipboardFormatAvailable(CF_UNICODETEXT);
 }
 
@@ -3004,6 +3020,18 @@ void ScintillaWin::Paste(bool asBinary) {
 			return;
 		}
 	}
+
+#if DebugCopyAsRichTextFormat
+	if (::IsClipboardFormatAvailable(cfRTF)) {
+		GlobalMemory memUSelection(::GetClipboardData(cfRTF));
+		if (const char *ptr = static_cast<const char *>(memUSelection.ptr)) {
+			NewLine();
+			InsertPasteShape(ptr, strlen(ptr), PasteShape::stream);
+			memUSelection.Unlock();
+			NewLine();
+		}
+	}
+#endif
 
 	// Use CF_UNICODETEXT if available
 	GlobalMemory memUSelection(::GetClipboardData(CF_UNICODETEXT));
@@ -3383,7 +3411,7 @@ void ScintillaWin::GetIntelliMouseParameters() noexcept {
 	}
 }
 
-void ScintillaWin::CopyToGlobal(GlobalMemory &gmUnicode, const SelectionText &selectedText, CopyEncoding encoding) {
+void ScintillaWin::CopyToGlobal(GlobalMemory &gmUnicode, const SelectionText &selectedText, CopyEncoding encoding) const {
 	const std::string_view svSelected(selectedText.Data(), selectedText.LengthWithTerminator());
 	switch (encoding) {
 	case CopyEncoding::Unicode: {
@@ -3422,7 +3450,7 @@ void ScintillaWin::CopyToGlobal(GlobalMemory &gmUnicode, const SelectionText &se
 	}
 }
 
-void ScintillaWin::CopyToClipboard(const SelectionText &selectedText) {
+void ScintillaWin::CopyToClipboard(const SelectionText &selectedText) const {
 	if (!::OpenClipboardRetry(MainHWND())) {
 		return;
 	}

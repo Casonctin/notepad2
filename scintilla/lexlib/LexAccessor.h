@@ -122,13 +122,13 @@ public:
 	}
 
 	bool MatchLower(Sci_Position pos, char ch0) noexcept {
-		const char ch = SafeGetCharAt(pos);
+		const char ch = (*this)[pos];
 		return (ch | 0x20) == ch0;
 	}
 
 	bool Match(Sci_Position pos, const char *s) noexcept {
 		for (; *s; s++, pos++) {
-			if (*s != SafeGetCharAt(pos)) {
+			if (*s != (*this)[pos]) {
 				return false;
 			}
 		}
@@ -348,7 +348,7 @@ inline int GetMatchedDelimiterCount(LexAccessor &styler, Sci_PositionU pos, int 
 }
 
 void BacktrackToStart(const LexAccessor &styler, int stateMask, Sci_PositionU &startPos, Sci_Position &lengthDoc, int &initStyle) noexcept;
-Sci_PositionU LookbackNonWhite(LexAccessor &styler, Sci_PositionU startPos, int maxSpaceStyle, int &chPrevNonWhite, int &stylePrevNonWhite) noexcept;
+Sci_PositionU LookbackNonWhite(LexAccessor &styler, Sci_PositionU startPos, unsigned maxSpaceStyle, int &chPrevNonWhite, int &stylePrevNonWhite) noexcept;
 Sci_PositionU CheckBraceOnNextLine(LexAccessor &styler, Sci_Line line, int operatorStyle, int maxSpaceStyle, int ignoreStyle = 0) noexcept;
 
 }

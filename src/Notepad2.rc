@@ -40,28 +40,68 @@ IDR_RT_MANIFEST         RT_MANIFEST             "..\\res\\Notepad2.exe.manifest"
 
 // Icon with lowest ID value placed first to ensure application icon
 // remains consistent on all systems.
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
 IDR_MAINWND             ICON                    "..\\res\\Notepad2.ico"
 IDI_RUN                 ICON                    "..\\res\\Run.ico"
 IDI_STYLES              ICON                    "..\\res\\Styles.ico"
+#else
+IDR_MAINWND             ICON                    "..\\res\\Notepad2_min.ico"
+IDI_RUN                 ICON                    "..\\res\\Run_min.ico"
+IDI_STYLES              ICON                    "..\\res\\Styles_min.ico"
+#endif
 
+//#if !NP2_ENABLE_APP_LOCALIZATION_DLL
 /////////////////////////////////////////////////////////////////////////////
 //
 // Bitmap
 //
 
-IDR_MAINWND             BITMAP                  "..\\res\\Toolbar.bmp"
-IDB_OPEN_FOLDER         BITMAP                  "..\\res\\OpenFolder.bmp"
-IDB_NEXT                BITMAP                  "..\\res\\Next.bmp"
-IDB_PREV                BITMAP                  "..\\res\\Prev.bmp"
+IDB_TOOLBAR16           BITMAP                  "..\\res\\Toolbar16.bmp"
+IDB_OPEN_FOLDER16       BITMAP                  "..\\res\\OpenFolder16.bmp"
+IDB_NEXT16              BITMAP                  "..\\res\\Next16.bmp"
+IDB_PREV16              BITMAP                  "..\\res\\Prev16.bmp"
 IDB_PICK                BITMAP                  "..\\res\\Pick.bmp"
-IDB_ENCODING            BITMAP                  "..\\res\\Encoding.bmp"
+IDB_ENCODING16          BITMAP                  "..\\res\\Encoding16.bmp"
+
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+IDB_TOOLBAR24           BITMAP                  "..\\res\\Toolbar24.bmp"
+IDB_TOOLBAR32           BITMAP                  "..\\res\\Toolbar32.bmp"
+IDB_TOOLBAR40           BITMAP                  "..\\res\\Toolbar40.bmp"
+IDB_TOOLBAR48           BITMAP                  "..\\res\\Toolbar48.bmp"
+
+IDB_OPEN_FOLDER24       BITMAP                  "..\\res\\OpenFolder24.bmp"
+IDB_OPEN_FOLDER32       BITMAP                  "..\\res\\OpenFolder32.bmp"
+IDB_OPEN_FOLDER40       BITMAP                  "..\\res\\OpenFolder40.bmp"
+IDB_OPEN_FOLDER48       BITMAP                  "..\\res\\OpenFolder48.bmp"
+
+IDB_NEXT24              BITMAP                  "..\\res\\Next24.bmp"
+IDB_NEXT32              BITMAP                  "..\\res\\Next32.bmp"
+IDB_NEXT40              BITMAP                  "..\\res\\Next40.bmp"
+IDB_NEXT48              BITMAP                  "..\\res\\Next48.bmp"
+
+IDB_PREV24              BITMAP                  "..\\res\\Prev24.bmp"
+IDB_PREV32              BITMAP                  "..\\res\\Prev32.bmp"
+IDB_PREV40              BITMAP                  "..\\res\\Prev40.bmp"
+IDB_PREV48              BITMAP                  "..\\res\\Prev48.bmp"
+
+IDB_ENCODING24          BITMAP                  "..\\res\\Encoding24.bmp"
+IDB_ENCODING32          BITMAP                  "..\\res\\Encoding32.bmp"
+IDB_ENCODING40          BITMAP                  "..\\res\\Encoding40.bmp"
+IDB_ENCODING48          BITMAP                  "..\\res\\Encoding48.bmp"
+#endif // NP2_ENABLE_HIDPI_IMAGE_RESOURCE
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // Cursor
 //
 
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
 IDC_COPY                CURSOR                  "..\\res\\Copy.cur"
+#else
+IDC_COPY                CURSOR                  "..\\res\\Copy_min.cur"
+#endif
+
+//#endif // NP2_ENABLE_APP_LOCALIZATION_DLL
 
 /////////////////////////////////////////////////////////////////////////////
 //

@@ -19,7 +19,7 @@ static KEYWORDLIST Keywords_JS = {{
 "FinalizationRegistry Float32Array Float64Array FormData Function GeneratorFunction Int16Array Int32Array Int8Array JSON "
 "Map Math Number Object Promise Proxy RangeError ReferenceError Reflect RegExp "
 "Set SharedArrayBuffer String Symbol SyntaxError TypeError URIError Uint16Array Uint32Array Uint8Array Uint8ClampedArray "
-"VBArray WScript WeakMap WeakRef WeakSet Worker XMLHttpRequest jQuery "
+"VBArray WScript WeakMap WeakRef WeakSet Worker XMLHttpRequest "
 
 , // 4 interface
 NULL
@@ -90,7 +90,8 @@ NULL
 "table( tan( tanh( terminate( test( then( throw( time( timeEnd( timeLog( toArray( toDateString( toExponential( toFixed( "
 "toGMTString( toISOString( toJSON( "
 "toLocaleDateString( toLocaleLowerCase( toLocaleString( toLocaleTimeString( toLocaleUpperCase( toLowerCase( toPrecision( "
-"toString( toTimeString( toUTCString( toUpperCase( toggleAttribute( trace( trim( trimEnd( trimStart( trunc( "
+"toString( toTimeString( toUTCString( toUpperCase( toggleAttribute( "
+"trace( trim( trimEnd( trimLeft( trimRight( trimStart( trunc( "
 "ubound( unescape( unregister( unshift( valueOf( values( wait( wake( warn( write( writeln( xor( "
 
 , // 9 properties
@@ -145,14 +146,14 @@ static EDITSTYLE Styles_JS[] = {
 	{ SCE_JS_FUNCTION_DEFINITION, NP2StyleX_FunctionDefinition, L"bold; fore:#A46000" },
 	{ SCE_JS_FUNCTION, NP2StyleX_Function, L"fore:#A46000" },
 	{ SCE_JS_CONSTANT, NP2StyleX_Constant, L"fore:#B000B0" },
-	{ MULTI_STYLE(SCE_JS_COMMENTLINE, SCE_JS_COMMENTBLOCK, 0, 0), NP2StyleX_Comment, L"fore:#608060" },
+	{ MULTI_STYLE(SCE_JS_COMMENTLINE, SCE_JS_COMMENTBLOCK, SCE_JS_HTMLCOMMENT, 0), NP2StyleX_Comment, L"fore:#608060" },
 	{ MULTI_STYLE(SCE_JS_COMMENTLINEDOC, SCE_JS_COMMENTBLOCKDOC, 0, 0), NP2StyleX_DocComment, L"fore:#408040" },
 	{ MULTI_STYLE(SCE_JS_COMMENTTAGAT, SCE_JS_COMMENTTAGXML, 0, 0), NP2StyleX_DocCommentTag, L"fore:#408080" },
 	{ SCE_JS_TASKMARKER, NP2StyleX_TaskMarker, L"bold; fore:#408080" },
 	{ MULTI_STYLE(SCE_JS_STRING_SQ, SCE_JS_STRING_DQ, SCE_JSX_STRING_SQ, SCE_JSX_STRING_DQ), NP2StyleX_String, L"fore:#008000" },
 	{ SCE_JS_STRING_BT, NP2StyleX_TemplateLiteral, L"fore:#F08000" },
 	{ SCE_JS_ESCAPECHAR, NP2StyleX_EscapeSequence, L"fore:#0080C0" },
-	{ SCE_JS_KEY, NP2StyleX_Property, L"fore:#A46000" },
+	{ SCE_JS_KEY, NP2StyleX_Property, L"fore:#648000" },
 	{ SCE_JS_REGEX, NP2StyleX_Regex, L"fore:#006633; back:#FFF1A8" },
 	{ SCE_JSX_TAG, NP2StyleX_XMLTag, L"fore:#648000" },
 	{ MULTI_STYLE(SCE_JSX_ATTRIBUTE, SCE_JSX_ATTRIBUTE_AT, 0, 0), NP2StyleX_XMLAttribute, L"fore:#FF4000" },

@@ -48,6 +48,10 @@ public:
 		return start == end;
 	}
 
+	[[nodiscard]] Sci::Position Length() const noexcept {
+		return (start <= end) ? (end - start) : (start - end);
+	}
+
 	Sci::Position First() const noexcept {
 		return std::min(start, end);
 	}
@@ -198,7 +202,7 @@ public:
 	bool UseContainerLexing() const noexcept;
 };
 
-struct RegexError : public std::runtime_error {
+struct RegexError final : public std::runtime_error {
 	RegexError() : std::runtime_error("regex failure") {}
 };
 
@@ -281,6 +285,7 @@ private:
 	int enteredStyling;
 	int enteredReadOnlyCount;
 
+	bool matchesValid;
 	bool insertionSet;
 	std::string insertion;
 
@@ -298,10 +303,9 @@ private:
 	LineAnnotation *Annotations() const noexcept;
 	LineAnnotation *EOLAnnotations() const noexcept;
 
-	bool matchesValid;
 	std::unique_ptr<RegexSearchBase> regex;
 	std::unique_ptr<LexInterface> pli;
-	const DBCSCharClassify *dbcsCharClass;
+	std::unique_ptr<DBCSCharClassify> dbcsCharClass;
 
 public:
 
@@ -520,6 +524,7 @@ public:
 	int MarkerNumberFromLine(Sci::Line line, int which) const noexcept;
 	int MarkerHandleFromLine(Sci::Line line, int which) const noexcept;
 	Sci_Position SCI_METHOD LineStart(Sci_Line line) const noexcept override;
+	[[nodiscard]] Range LineRange(Sci::Line line) const noexcept;
 	bool IsLineStartPosition(Sci::Position position) const noexcept;
 	Sci_Position SCI_METHOD LineEnd(Sci_Line line) const noexcept override;
 	Sci::Position LineEndPosition(Sci::Position position) const noexcept;
@@ -535,7 +540,7 @@ public:
 	Scintilla::FoldLevel GetFoldLevel(Sci_Position line) const noexcept;
 	void ClearLevels();
 	Sci::Line GetLastChild(Sci::Line lineParent, Scintilla::FoldLevel level = Scintilla::FoldLevel::None, Sci::Line lastLine = -1);
-	Sci::Line GetFoldParent(Sci::Line line, Scintilla::FoldLevel level = Scintilla::FoldLevel::None) const noexcept;
+	Sci::Line GetFoldParent(Sci::Line line) const noexcept;
 	void GetHighlightDelimiters(HighlightDelimiter &highlightDelimiter, Sci::Line line, Sci::Line lastLine);
 
 	Sci::Position ExtendWordSelect(Sci::Position pos, int delta, bool onlyWordCharacters = false) const noexcept;

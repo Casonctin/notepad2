@@ -412,6 +412,8 @@ String(value) {
 		strike()
 		sub()
 		sup()
+		trimLeft()
+		trimRight()
 
 }
 
@@ -1080,6 +1082,3 @@ Worker() {
 	removeItem(keyName)
 	setItem(keyName, keyValue)
 }
-
-// https://api.jquery.com/
-jQuery

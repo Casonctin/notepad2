@@ -34,12 +34,12 @@
 #define VERSION_SCIPAGE_DISPLAY		L"https://www.scintilla.org/"
 
 #define HELP_LINK_LATEST_RELEASE	L"https://github.com/zufuliu/notepad2/releases"
-#define HELP_LINK_LATEST_BUILD		L"https://ci.appveyor.com/project/zufuliu/notepad2"
+#define HELP_LINK_LATEST_BUILD		L"https://github.com/zufuliu/notepad2/actions"
 #define HELP_LINK_REPORT_ISSUE		L"https://github.com/zufuliu/notepad2/issues"
 #define HELP_LINK_FEATURE_REQUEST	L"https://github.com/zufuliu/notepad2/issues"
 #define HELP_LINK_ONLINE_WIKI		L"https://github.com/zufuliu/notepad2/wiki"
 
-#define VERSION_BUILD_INFO_LIB		L",\nScintilla 5.3.2."
+#define VERSION_BUILD_INFO_LIB		L",\nScintilla 5.3.4."
 #define VERSION_BUILD_INFO_FORMAT	L"Compiled on " __DATE__ L" with %s %d.%d.%d" VERSION_BUILD_INFO_LIB
 #if defined(__clang__)
 #define VERSION_BUILD_TOOL_NAME		L"Clang"

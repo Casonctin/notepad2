@@ -22,7 +22,6 @@
 #include <optional>
 #include <algorithm>
 #include <memory>
-#include <chrono>
 
 #ifndef NO_CXX11_REGEX
 #include <regex>
@@ -147,7 +146,6 @@ Document::Document(DocumentOption options) :
 	eolMode = EndOfLine::Lf;
 #endif
 	dbcsCodePage = CpUtf8;
-	dbcsCharClass = nullptr;
 	lineEndBitSet = LineEndType::Default;
 	endStyled = 0;
 	styleClock = 0;
@@ -263,13 +261,20 @@ LineEndType Document::LineEndTypesSupported() const noexcept {
 		return LineEndType::Default;
 }
 
+static inline std::unique_ptr<DBCSCharClassify> GetDBCSCharClassify(int codePage) {
+	if (codePage != 0 && codePage != CpUtf8) {
+		return std::make_unique<DBCSCharClassify>(codePage);
+	}
+	return {};
+}
+
 bool Document::SetDBCSCodePage(int dbcsCodePage_) {
 	if (dbcsCodePage != dbcsCodePage_) {
 		dbcsCodePage = dbcsCodePage_;
 		pcf.reset();
 		cb.SetLineEndTypes(lineEndBitSet & LineEndTypesSupported());
 		cb.SetUTF8Substance(CpUtf8 == dbcsCodePage);
-		dbcsCharClass = DBCSCharClassify::Get(dbcsCodePage_);
+		dbcsCharClass = GetDBCSCharClassify(dbcsCodePage);
 		ModifiedAt(0);	// Need to restyle whole document
 		return true;
 	} else {
@@ -460,6 +465,10 @@ Sci_Position SCI_METHOD Document::LineStart(Sci_Line line) const noexcept {
 	return cb.LineStart(line);
 }
 
+Range Document::LineRange(Sci::Line line) const noexcept {
+	return {cb.LineStart(line), cb.LineStart(line + 1)};
+}
+
 bool Document::IsLineStartPosition(Sci::Position position) const noexcept {
 	return LineStart(SciLineFromPosition(position)) == position;
 }
@@ -615,21 +624,8 @@ Sci::Line Document::GetLastChild(Sci::Line lineParent, FoldLevel level, Sci::Lin
 	return lineMaxSubord;
 }
 
-Sci::Line Document::GetFoldParent(Sci::Line line, FoldLevel level) const noexcept {
-	if (level == FoldLevel::None) {
-		level = GetFoldLevel(line);
-	}
-	level = LevelNumberPart(level);
-	if (level == FoldLevel::Base) {
-		return -1;
-	}
-	for (Sci::Line lineLook = line - 1; lineLook >= 0; lineLook--) {
-		const FoldLevel levelTry = GetFoldLevel(lineLook);
-		if (LevelIsHeader(levelTry) && LevelNumberPart(levelTry) < level) {
-			return lineLook;
-		}
-	}
-	return -1;
+Sci::Line Document::GetFoldParent(Sci::Line line) const noexcept {
+	return Levels()->GetFoldParent(line);
 }
 
 void Document::GetHighlightDelimiters(HighlightDelimiter &highlightDelimiter, Sci::Line line, Sci::Line lastLine) {
@@ -645,7 +641,7 @@ void Document::GetHighlightDelimiters(HighlightDelimiter &highlightDelimiter, Sc
 		lookLineLevelNum = LevelNumberPart(lookLineLevel);
 	}
 
-	Sci::Line beginFoldBlock = LevelIsHeader(lookLineLevel) ? lookLine : GetFoldParent(lookLine, lookLineLevel);
+	Sci::Line beginFoldBlock = LevelIsHeader(lookLineLevel) ? lookLine : GetFoldParent(lookLine);
 	if (beginFoldBlock < 0) {
 		highlightDelimiter.Clear();
 		return;
@@ -2936,7 +2932,7 @@ Sci::Position Document::BraceMatch(Sci::Position position, Sci::Position /*maxRe
 /**
  * Implementation of RegexSearchBase for the default built-in regular expression engine
  */
-class BuiltinRegex : public RegexSearchBase {
+class BuiltinRegex final : public RegexSearchBase {
 public:
 	explicit BuiltinRegex(const CharClassify *charClassTable) : search(charClassTable) {}
 
@@ -2998,19 +2994,12 @@ public:
 };
 
 // Define a way for the Regular Expression code to access the document
-class DocumentIndexer : public CharacterIndexer {
+class DocumentIndexer final : public CharacterIndexer {
 	const Document *pdoc;
 	Sci::Position end;
 public:
 	DocumentIndexer(const Document *pdoc_, Sci::Position end_) noexcept :
 		pdoc(pdoc_), end(end_) {}
-
-	DocumentIndexer(const DocumentIndexer &) = delete;
-	DocumentIndexer(DocumentIndexer &&) = delete;
-	DocumentIndexer &operator=(const DocumentIndexer &) = delete;
-	DocumentIndexer &operator=(DocumentIndexer &&) = delete;
-
-	~DocumentIndexer() override = default;
 
 	char CharAt(Sci::Position index) const noexcept override {
 		if (IsValidIndex(index, end))
@@ -3240,7 +3229,7 @@ public:
 
 #endif
 
-std::regex_constants::match_flag_type MatchFlags(const Document *doc, Sci::Position startPos, Sci::Position endPos) {
+std::regex_constants::match_flag_type MatchFlags(const Document *doc, Sci::Position startPos, Sci::Position endPos) noexcept {
 	std::regex_constants::match_flag_type flagsMatch = std::regex_constants::match_default;
 	if (!doc->IsLineStartPosition(startPos))
 		flagsMatch |= std::regex_constants::match_not_bol;

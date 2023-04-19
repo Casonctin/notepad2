@@ -7,9 +7,9 @@ import uuid
 import subprocess
 
 app = os.path.basename(__file__)
-localeDir = '.'
-notepad2_src = '../src/Notepad2.rc'
-metapath_src = '../metapath/src/metapath.rc'
+localeDir = os.getcwd()
+notepad2_src = os.path.abspath('../src/Notepad2.rc')
+metapath_src = os.path.abspath('../metapath/src/metapath.rc')
 
 def get_available_locales():
 	result = []
@@ -397,7 +397,7 @@ class StringExtractor:
 							block_caption = caption
 					elif block_type == Block_StringTable:
 						lineno = self.parse_string_table_item(lineno, line, block_items)
-				except Exception as ex:
+				except Exception:
 					print(f'parse {block_type} {block_name} fail at {lineno} for {self.path}')
 					raise
 

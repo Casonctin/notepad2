@@ -84,6 +84,12 @@ struct EscapeSequence {
 	}
 };
 
+enum class FormattedStringPart {
+	None,
+	FormatSpec,
+	End,
+};
+
 struct FormattedStringState {
 	int state;
 	int nestedLevel;
@@ -376,9 +382,8 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 	KeywordType kwType = KeywordType::None;
 	int visibleChars = 0;
 	int visibleCharsBefore = 0;
-	int operatorBefore = 0;
+	int chBefore = 0;
 	int chPrevNonWhite = 0;
-	int stylePrevNonWhite = SCE_PY_DEFAULT;
 	int prevIndentCount = 0;
 	int indentCount = 0;
 	int parenCount = 0;
@@ -386,7 +391,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 	bool prevLineContinuation = false;
 	bool lineContinuation = false;
 	bool insideUrl = false;
-	bool insideFStringFormatSpec = false;
+	FormattedStringPart fstringPart = FormattedStringPart::None;
 	EscapeSequence escSeq;
 
 	std::vector<FormattedStringState> nestedState;
@@ -407,7 +412,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 	}
 	if (startPos != 0 && IsSpaceEquiv(initStyle)) {
 		// look back for better dict key colouring
-		LookbackNonWhite(styler, startPos, SCE_PY_TASKMARKER, chPrevNonWhite, stylePrevNonWhite);
+		LookbackNonWhite(styler, startPos, SCE_PY_TASKMARKER, chPrevNonWhite, initStyle);
 	}
 
 	while (sc.More()) {
@@ -494,7 +499,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 		case SCE_PY_TRIPLE_RAWBYTES_SQ:
 		case SCE_PY_TRIPLE_RAWBYTES_DQ:
 			if (sc.atLineStart && !lineContinuation) {
-				if (!IsPyTripleQuotedString(sc.state)) {
+				if (fstringPart == FormattedStringPart::None && !IsPyTripleQuotedString(sc.state)) {
 					sc.SetState(SCE_PY_DEFAULT);
 					break;
 				}
@@ -533,7 +538,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 							nestedState.pop_back();
 						}
 						if ((sc.state == SCE_PY_STRING_SQ || sc.state == SCE_PY_STRING_DQ)
-							&& (operatorBefore == ',' || operatorBefore == '{')) {
+							&& (chBefore == ',' || chBefore == '{')) {
 							// dict string key
 							const int chNext = sc.GetLineNextChar();
 							if (chNext == ':') {
@@ -558,7 +563,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 						} else {
 							nestedState.back().nestedLevel += 1;
 						}
-						insideFStringFormatSpec = false;
+						fstringPart = FormattedStringPart::None;
 						sc.SetState(SCE_PY_OPERATOR2);
 						sc.ForwardSetState(SCE_PY_DEFAULT);
 					} else if (sc.chNext == '}' || sc.chNext == '!' || sc.chNext == ':' || IsIdentifierCharEx(sc.chNext)) {
@@ -584,7 +589,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 							const int state = sc.state;
 							sc.SetState(SCE_PY_OPERATOR2);
 							sc.ForwardSetState(state);
-							insideFStringFormatSpec = false;
+							fstringPart = FormattedStringPart::None;
 							continue;
 						}
 					}
@@ -638,7 +643,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 
 			case '!':
 			case ':':
-				if (insideFStringFormatSpec) {
+				if (fstringPart == FormattedStringPart::FormatSpec) {
 					const Sci_Position length = CheckBraceFormatSpecifier(sc, styler);
 					if (length != 0) {
 						const int state = sc.state;
@@ -759,7 +764,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 					sc.SetState((sc.ch == '\'') ? SCE_PY_TRIPLE_STRING_SQ : SCE_PY_TRIPLE_STRING_DQ);
 					sc.Advance(2);
 				} else {
-					operatorBefore = (stylePrevNonWhite == SCE_PY_OPERATOR) ? chPrevNonWhite : 0;
+					chBefore = chPrevNonWhite;
 					sc.SetState((sc.ch == '\'') ? SCE_PY_STRING_SQ : SCE_PY_STRING_DQ);
 				}
 			} else if (IsADigit(sc.ch) || (sc.ch == '.' && IsADigit(sc.chNext))) {
@@ -807,7 +812,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 				if (interpolating) {
 					const FormattedStringState &state = nestedState.back();
 					if (state.parenCount == 0 && IsPyFormattedStringEnd(sc, braceCount)) {
-						insideFStringFormatSpec = sc.ch != '}';
+						fstringPart = (sc.ch == '}') ? FormattedStringPart::End : FormattedStringPart::FormatSpec;
 						sc.SetState(state.state);
 						continue;
 					}
@@ -828,7 +833,6 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 			visibleChars++;
 			if (!IsSpaceEquiv(sc.state)) {
 				chPrevNonWhite = sc.ch;
-				stylePrevNonWhite = sc.state;
 			}
 		}
 		if (sc.atLineEnd) {
@@ -860,7 +864,7 @@ void ColourisePyDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyl
 			styler.SetLineState(sc.currentLine, lineState);
 			lineState = 0;
 			kwType = KeywordType::None;
-			insideFStringFormatSpec = false;
+			fstringPart = FormattedStringPart::None;
 			visibleChars = 0;
 			visibleCharsBefore = 0;
 			indentCount = 0;
