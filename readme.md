@@ -22,6 +22,8 @@ Latest development builds (artifacts in Release configuration for each compiler 
 * [Context-based auto-completion for some words](https://github.com/zufuliu/notepad2/wiki/Auto-Completion-in-Notepad2#context-based-auto-completion)
 * [Enhanced auto indentation](https://github.com/zufuliu/notepad2/wiki/Auto-Completion-in-Notepad2#auto-indent-text)
 * [Auto completion for braces, brackets and quotes](https://github.com/zufuliu/notepad2/wiki/Auto-Completion-in-Notepad2#auto-insert-text)
+* [Color preview via CallTip and click CallTip to open color dialog](https://github.com/zufuliu/notepad2/wiki/CallTip)
+* Support Base64 encoding and decoding
 * Syntax highlighting, code folding and API list for (see built-in [file extension list](doc/FileExt.txt)):
 	* Plain Text
 	* [ABAQUS](tools/lang/ABAQUS.inp)
@@ -42,13 +44,13 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* [AWK](tools/lang/Awk.awk), up to GNU AWK 5.2.
 	* [Batch Script](tools/lang/Batch.bat), [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#batch)
 	* [blockdiag](tools/lang/blockdiag.diag), seqdiag, actdiag and nwdiag
-	* [C#](tools/lang/CSharp.cs), up to C# 11.0. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#c)
+	* [C#](tools/lang/CSharp.cs), up to C# 12.0. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#c)
 		* [Vala](https://wiki.gnome.org/Projects/Vala) 0.54
 	* C/C++, [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#cc)
 		* Objective-C/C++, [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#objective-cc)
 		* [C Standard Library](tools/lang/C.c), up to C2x.
 		* [C++ STL](tools/lang/CPP.cpp), up to C++20.
-	* [CSS Style Sheet](tools/lang/CSS.css), up to April 2023 snapshot.
+	* [CSS Style Sheet](tools/lang/CSS.css), up to August 2023 snapshot.
 		* [SCSS Style Sheet](tools/lang/SCSS.scss), up to Dart Sass 1.50.
 		* [Less Style Sheet](tools/lang/Less.less), up to Less 4.1.
 		* [HSS Style Sheet](tools/lang/HSS.hss)
@@ -59,9 +61,9 @@ Latest development builds (artifacts in Release configuration for each compiler 
 		* Apache Configuration File
 	* [CSV File](https://www.rfc-editor.org/rfc/rfc4180)
 	* [D](tools/lang/D.d), up to D language 2.0.
-	* [Dart](tools/lang/Dart.dart), up to Dart 2.12.
+	* [Dart](tools/lang/Dart.dart), up to Dart 3.0.
 	* Diff/Patch File
-	* F#
+	* [F#](tools/lang/FSharp.fs), up to F# 7.0.
 	* [Fortran](tools/lang/Fortran.f), up to Fortran 2018.
 	* [GN Build](tools/lang/GN.gn), up to GN 2019-03-13.
 	* [Go](tools/lang/Go.go), up to Go 1.14.
@@ -69,8 +71,9 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* [Gradle](tools/lang/Gradle.gradle), up to Gradle 6.8, [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#gradle)
 	* [GraphViz Dot](tools/lang/GraphViz.dot), up to GraphViz 2.49, [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#graphviz)
 	* [Groovy](tools/lang/Groovy.groovy), up to Groovy 4.0.
-	* [Haxe](tools/lang/Haxe.hx), up to Haxe 4.2
-	* [HTML](tools/lang/html.html), up to [WHATWG](https://html.spec.whatwg.org/multipage/) April 2023. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#html)
+	* [Haskell](tools/lang/Haskell.hs), up to GHC 9.6.
+	* [Haxe](tools/lang/Haxe.hx), up to Haxe 4.2.
+	* [HTML](tools/lang/html.html), up to [WHATWG](https://html.spec.whatwg.org/multipage/) June 2023. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#html)
 		* ASP
 		* ASP.NET
 		* JSP
@@ -80,9 +83,9 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* [Boost Jam](tools/lang/Jamfile.jam), up to Jam 4.4.
 	* [Java](tools/lang/Java.java), up to Java 20. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#java)
 		* [BeanShell](https://github.com/beanshell/beanshell)
-	* [JavaScript](tools/lang/JavaScript.js), up to ECMAScript 2022 with [JSX](https://facebook.github.io/jsx/) and [Web APIs](https://developer.mozilla.org/en-US/docs/Web/API).
+	* [JavaScript](tools/lang/JavaScript.js), up to ECMAScript 2023 with [JSX](https://facebook.github.io/jsx/) and [Web APIs](https://developer.mozilla.org/en-US/docs/Web/API).
 	* [JSON](https://www.json.org) and [JSON5](https://json5.org/) Document
-	* [Julia Script](tools/lang/Julia.jl), up to Julia 1.2. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#julia)
+	* [Julia Script](tools/lang/Julia.jl), up to Julia 1.9. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#julia)
 	* [Kotlin](tools/lang/Kotlin.kt), up to Kotlin 1.7.
 	* LaTeX
 	* Lisp Script (Common Lisp, Clojure, Scheme, etc.)
@@ -98,13 +101,16 @@ Latest development builds (artifacts in Release configuration for each compiler 
 		* [GitHub Flavored Markdown](https://github.github.com/gfm/)
 		* [GitLab Flavored Markdown](https://docs.gitlab.com/ee/user/markdown.html)
 		* [Pandoc’s Markdown](https://pandoc.org/MANUAL.html#pandocs-markdown)
+	* [Mathematica](tools/lang/Mathematica.nb) and [WolframScript](https://www.wolfram.com/wolframscript/)
 	* MATLAB, [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#matlab-octave)
 		* Octave
 		* Scilab
 		* Gnuplot
+	* [Nim Script](tools/lang/Nim.nim), up to Nim 2.0.
 	* [Nullsoft Scriptable Install System](tools/lang/NSIS.nsi), up to NSIS 3.09.
+	* [OCaml](tools/lang/OCaml.ml), up to OCaml 5.0.
 	* Pascal, Delphi
-	* Perl, [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#perl)
+	* [Perl](tools/lang/Perl.pl), up to Perl 5.36. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#perl)
 	* [PowerShell](tools/lang/PowerShell.ps1), up to PowerShell 7.2.
 	* [Python](tools/lang/Python.py), up to Python 3.11. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#python)
 	* [PHP Script](tools/lang/PHP.php), up to PHP 8.2. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#php)
@@ -115,13 +121,13 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* [Rust](tools/lang/Rust.rs), up to Rust 1.38. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#rust)
 	* [Scala](tools/lang/Scala.scala), up to Scala 3.2.
 	* Shell Script
-		* Bash likes (sh, bash, dash, ash, zsh, ksh), [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#shell-script)
-		* C Shell (csh, tcsh)
+		* [Bash](tools/lang/Bash.sh) likes (sh, bash, dash, ash, zsh, ksh), up to Bash 5.2. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#shell-script)
+		* [C Shell](tools/lang/CShell.csh) (csh, tcsh), up to tcsh 6.24.
 		* M4 Macro, limited support
 	* SQL Query
 		* [SQL Standard](tools/lang/SQL.sql), up to SQL:2016.
 		* [MySQL](tools/lang/MySQL.sql), up to MySQL 8.0, MariaDB 10.9.
-		* [SQLite3](tools/lang/SQLite3.sql), up to 3.39.
+		* [SQLite3](tools/lang/SQLite3.sql), up to 3.41.
 		* [PostgreSQL](tools/lang/PostgreSQL.sql), PostgreSQL 14.
 		* [Transact-SQL](tools/lang/Transact-SQL.sql), SQL Server 2019.
 		* [Oracle](tools/lang/Oracle.sql), Oracle 20, incomplete.
@@ -129,7 +135,7 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* TCL, [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#tcl)
 	* [Texinfo](tools/lang/Texinfo.texi), up to Texinfo 7.0.
 	* [TOML File](https://toml.io/)
-	* [TypeScript](tools/lang/TypeScript.ts), TypeScript 5.0.
+	* [TypeScript](tools/lang/TypeScript.ts), TypeScript 5.2.
 	* Visual Basic, VB6, VB.NET
 	* VBScript
 	* [VHDL](tools/lang/VHDL.vhdl), up to VHDL 2019.
@@ -140,21 +146,9 @@ Latest development builds (artifacts in Release configuration for each compiler 
 		* XML Schema
 		* XML Stylesheet
 		* SGML and DTD
-		* Ant Build
-		* Maven POM
-		* Maven Settings
-		* Ivy Module
-		* Ivy Settings
-		* PMD Ruleset
-		* Checkstyle Module
-		* Tomcat Config
-		* Java web.xml
-		* Struts config
-		* Hibernate config and mapping
-		* Spring Beans
 		* Apple Property List
-		* Android Manifest
 	* [YAML Document](https://yaml.org/)
+	* [Zig](tools/lang/Zig.zig), up to Zig 0.11.
 	* Many Others
 * Toggle fold for specific level, shortcuts: <kbd>Alt</kbd>+<kbd>Number</kbd>
 * Toggle fold for current block without scrolling back to the block start line, shortcut: <kbd>Alt</kbd>+<kbd>C</kbd>, or context menu "Toggle Fold"
