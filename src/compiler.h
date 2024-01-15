@@ -49,6 +49,13 @@ typedef _Bool	bool;
 #define NP2_static_assert(expr)		_STATIC_ASSERT(expr)
 #endif
 
+// suppress clang-tidy [bugprone-multi-level-implicit-pointer-conversion] warning
+#if defined(__cplusplus)
+#define NP2_void_pointer(expr)		(reinterpret_cast<void *>(expr))
+#else
+#define NP2_void_pointer(expr)		((void *)(expr))
+#endif
+
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(__cplusplus)
 // https://stackoverflow.com/questions/19452971/array-size-macro-that-rejects-pointers
 // trigger error for pointer: GCC: void value not ignored as it ought to be. Clang: invalid operands to binary expression.
@@ -100,13 +107,6 @@ typedef _Bool	bool;
 
 // force compile C as CPP: /TP for MSVC and clang-cl, -x c++ for GCC and clang
 #define NP2_FORCE_COMPILE_C_AS_CPP	0
-
-// use C99 designated initializer to avoid [-Wmissing-field-initializers] warning
-#if defined(__cplusplus) && !defined(__clang__)
-#define NP2_USE_DESIGNATED_INITIALIZER	0
-#else
-#define NP2_USE_DESIGNATED_INITIALIZER	1
-#endif
 
 #define PP_CONCAT_(x, y)	x##y
 #define PP_CONCAT(x, y)		PP_CONCAT_(x, y)

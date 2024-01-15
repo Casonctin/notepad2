@@ -1598,13 +1598,15 @@ def parse_kotlin_api_file(path):
 
 	if True:
 		# for JVM target
-		keywordMap['class'].update(JavaKeywordMap['class'])
-		keywordMap['interface'].extend(JavaKeywordMap['interface'])
+		keywordMap['Java class'] = JavaKeywordMap['class']
+		keywordMap['Java interface'] = JavaKeywordMap['interface']
 		keywordMap['enumeration'].update(JavaKeywordMap['enumeration'])
 		keywordMap['annotation'].update(JavaKeywordMap['annotation'])
 
 	RemoveDuplicateKeyword(keywordMap, [
 		'keywords',
+		'Java class',
+		'Java interface',
 		'class',
 		'interface',
 		'enumeration',
@@ -1612,7 +1614,9 @@ def parse_kotlin_api_file(path):
 	])
 	return [
 		('keywords', keywordMap['keywords'], KeywordAttr.Default),
+		('Java class', keywordMap['Java class'], KeywordAttr.Default),
 		('class', keywordMap['class'], KeywordAttr.Default),
+		('Java interface', keywordMap['Java interface'], KeywordAttr.Default),
 		('interface', keywordMap['interface'], KeywordAttr.Default),
 		('enumeration', keywordMap['enumeration'], KeywordAttr.Default),
 		('annotation', keywordMap['annotation'], KeywordAttr.NoLexer | KeywordAttr.Special),
@@ -2577,13 +2581,34 @@ def parse_wasm_lexer_keywords(path):
 	RemoveDuplicateKeyword(keywordMap, [
 		'keywords',
 		'type',
-		'instruction'
+		'instruction',
 	])
 	return [
 		('keywords', keywordMap['keywords'], KeywordAttr.Default),
 		('type', keywordMap['type'], KeywordAttr.Default),
 		('instruction', keywordMap['instruction'], KeywordAttr.Default),
 		('full instruction', keywordMap['full instruction'], KeywordAttr.NoLexer),
+	]
+
+def parse_winhex_api_file(path):
+	keywordMap = {}
+	sections = read_api_file(path, '//')
+	for key, doc in sections:
+		if key in ('keywords', 'commands'):
+			keywordMap[key] = [line.split()[0] for line in doc.splitlines() if line]
+		elif key in ('type', 'misc'):
+			keywordMap[key] = doc.split()
+	RemoveDuplicateKeyword(keywordMap, [
+		'keywords',
+		'type',
+		'commands',
+		'misc',
+	])
+	return [
+		('keywords', keywordMap['keywords'], KeywordAttr.MakeLower),
+		('type', keywordMap['type'], KeywordAttr.MakeLower),
+		('commands', keywordMap['commands'], KeywordAttr.MakeLower),
+		('misc', keywordMap['misc'], KeywordAttr.NoLexer),
 	]
 
 def parse_xml_api_file(path):

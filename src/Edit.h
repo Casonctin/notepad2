@@ -25,6 +25,8 @@
 #define NP2_FIND_REPLACE_LIMIT	2048
 #define NP2_LONG_LINE_LIMIT		4096
 
+//#define NP2_RegexDefaultFlags	(SCFIND_REGEXP | SCFIND_CXX11REGEX) // use std::regex
+#define NP2_RegexDefaultFlags	(SCFIND_REGEXP | SCFIND_POSIX) // use builtin regex
 #define NP2_InvalidSearchFlags	(-1)
 #define NP2_MarkAllMultiline	0x00001000
 #define NP2_MarkAllBookmark		0x00002000
@@ -163,7 +165,7 @@ void	EditMoveDown(void);
 void	EditModifyLines(LPCWSTR pwszPrefix, LPCWSTR pwszAppend, bool skipEmptyLine);
 void	EditAlignText(EditAlignMode nMode);
 void	EditEncloseSelection(LPCWSTR pwszOpen, LPCWSTR pwszClose);
-void	EditToggleLineComments(LPCWSTR pwszComment, bool bInsertAtStart);
+void	EditToggleLineComments(LPCWSTR pwszComment, int commentFlag);
 void	EditPadWithSpaces(bool bSkipEmpty, bool bNoUndoGroup);
 void	EditStripFirstCharacter(void);
 void	EditStripLastCharacter(void);
@@ -311,8 +313,10 @@ enum {
 	AutoInsertMask_SingleQuote = 32,		// ''
 	AutoInsertMask_Backtick = 64,			// ``
 	AutoInsertMask_SpaceAfterComma = 128,	// ', '
+	AutoInsertMask_CommentAtStart = true,	// '// '
+	AutoInsertMask_SpaceAfterComment = 256,	// '// '
 	// default settings
-	AutoInsertMask_Default = 255,
+	AutoInsertMask_Default = 511,
 };
 
 // asm line comment
@@ -364,8 +368,8 @@ bool	EditIsOpenBraceMatched(Sci_Position pos, Sci_Position startPos);
 void	EditAutoCloseBraceQuote(int ch, AutoInsertCharacter what);
 void	EditAutoCloseXMLTag(void);
 void	EditAutoIndent(void);
-void	EditToggleCommentLine(void);
-void	EditToggleCommentBlock(void);
+void	EditToggleCommentLine(bool alternative);
+void	EditToggleCommentBlock(bool alternative);
 void	EditInsertScriptShebangLine(void);
 
 typedef enum CallTipType {

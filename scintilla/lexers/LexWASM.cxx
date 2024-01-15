@@ -72,7 +72,7 @@ void ColouriseWASMDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initSt
 		1: lineStateLineComment
 		8: commentLevel
 		*/
-		commentLevel = (lineState >> 1) & 0xff;
+		commentLevel = lineState >> 1;
 	}
 
 	while (sc.More()) {
@@ -192,7 +192,7 @@ void ColouriseWASMDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initSt
 			++visibleChars;
 		}
 		if (sc.atLineEnd) {
-			const int lineState = commentLevel | lineStateLineComment;
+			const int lineState = (commentLevel << 1) | lineStateLineComment;
 			styler.SetLineState(sc.currentLine, lineState);
 			visibleChars = 0;
 			lineStateLineComment = 0;
@@ -253,6 +253,7 @@ void FoldWASMDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int /*initStyle
 
 		if (startPos == lineStartNext) {
 			const int lineCommentNext = GetLineCommentState(styler.GetLineState(lineCurrent + 1));
+			levelNext = sci::max(levelNext, SC_FOLDLEVELBASE);
 			if (lineCommentCurrent) {
 				levelNext += lineCommentNext - lineCommentPrev;
 			}
@@ -262,9 +263,7 @@ void FoldWASMDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int /*initStyle
 			if (levelUse < levelNext) {
 				lev |= SC_FOLDLEVELHEADERFLAG;
 			}
-			if (lev != styler.LevelAt(lineCurrent)) {
-				styler.SetLevel(lineCurrent, lev);
-			}
+			styler.SetLevel(lineCurrent, lev);
 
 			lineCurrent++;
 			lineStartNext = styler.LineStart(lineCurrent + 1);

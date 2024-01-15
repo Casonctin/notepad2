@@ -17,7 +17,7 @@
 #include "EditAutoC_Data0.h"
 #include "LaTeXInput.h"
 
-#define NP2_AUTOC_USE_STRING_ORDER	1
+#define NP2_AUTOC_CACHE_SORT_KEY	1
 #define NP2_AUTOC_USE_WORD_POINTER	0	// used for debug
 // scintilla/src/AutoComplete.h AutoComplete::maxItemLen
 #define NP2_AUTOC_MAX_WORD_LENGTH	(1024 - 3 - 1 - 16)	// SP + '(' + ')' + '\0'
@@ -34,15 +34,15 @@ struct WordNode;
 struct WordList {
 	int (__cdecl *WL_strcmp)(LPCSTR, LPCSTR);
 	int (__cdecl *WL_strncmp)(LPCSTR, LPCSTR, size_t);
-#if NP2_AUTOC_USE_STRING_ORDER
-	uint32_t (*WL_OrderFunc)(const void *, uint32_t);
+#if NP2_AUTOC_CACHE_SORT_KEY
+	uint32_t (*WL_SortKeyFunc)(const void *, uint32_t);
 #endif
 
 	struct WordNode *pListHead;
 	LPCSTR pWordStart;
 	UINT iStartLen;
-#if NP2_AUTOC_USE_STRING_ORDER
-	UINT orderStart;
+#if NP2_AUTOC_CACHE_SORT_KEY
+	UINT sortKey;
 	bool bIgnoreCase;
 #endif
 	UINT nWordCount;
@@ -56,25 +56,25 @@ struct WordList {
 // TODO: replace _stricmp() and _strnicmp() with other functions
 // which correctly case insensitively compares UTF-8 string and ANSI string.
 
-#if NP2_AUTOC_USE_STRING_ORDER
-#define NP2_AUTOC_ORDER_LENGTH	4
+#if NP2_AUTOC_CACHE_SORT_KEY
+#define NP2_AUTOC_SORT_KEY_LENGTH	4
 
-uint32_t WordList_Order(const void *pWord, uint32_t len) {
+uint32_t WordList_SortKey(const void *pWord, uint32_t len) {
 #if 0
 	uint32_t high = 0;
 	const uint8_t *ptr = (const uint8_t *)pWord;
-	len = min_u(len, NP2_AUTOC_ORDER_LENGTH);
+	len = min_u(len, NP2_AUTOC_SORT_KEY_LENGTH);
 	for (uint32_t i = 0; i < len; i++) {
 		high = (high << 8) | *ptr++;
 	}
-	if (len < NP2_AUTOC_ORDER_LENGTH) {
+	if (len < NP2_AUTOC_SORT_KEY_LENGTH) {
 		NP2_assume(len != 0); // suppress [clang-analyzer-core.uninitialized.Assign]
-		high <<= (NP2_AUTOC_ORDER_LENGTH - len)*8;
+		high <<= (NP2_AUTOC_SORT_KEY_LENGTH - len)*8;
 	}
 
 #else
 	uint32_t high = loadle_u32(pWord);
-	if (len < NP2_AUTOC_ORDER_LENGTH) {
+	if (len < NP2_AUTOC_SORT_KEY_LENGTH) {
 		high = bit_zero_high_u32(high, len*8);
 	}
 	high = bswap32(high);
@@ -82,11 +82,11 @@ uint32_t WordList_Order(const void *pWord, uint32_t len) {
 	return high;
 }
 
-uint32_t WordList_OrderCase(const void *pWord, uint32_t len) {
+uint32_t WordList_SortKeyCase(const void *pWord, uint32_t len) {
 #if 1
 	uint32_t high = 0;
 	const uint8_t *ptr = (const uint8_t *)pWord;
-	len = min_u(len, NP2_AUTOC_ORDER_LENGTH);
+	len = min_u(len, NP2_AUTOC_SORT_KEY_LENGTH);
 	for (uint32_t i = 0; i < len; i++) {
 		const uint8_t ch = *ptr++;
 		high = (high << 8) | ch;
@@ -95,15 +95,15 @@ uint32_t WordList_OrderCase(const void *pWord, uint32_t len) {
 			high += 'a' - 'A';
 		}
 	}
-	if (len < NP2_AUTOC_ORDER_LENGTH) {
+	if (len < NP2_AUTOC_SORT_KEY_LENGTH) {
 		NP2_assume(len != 0); // suppress [clang-analyzer-core.uninitialized.Assign]
-		high <<= (NP2_AUTOC_ORDER_LENGTH - len)*8;
+		high <<= (NP2_AUTOC_SORT_KEY_LENGTH - len)*8;
 	}
 
 #else
 	uint32_t high = loadle_u32(pWord);
 	high |= 0x20202020U; // only works for ASCII letters
-	if (len < NP2_AUTOC_ORDER_LENGTH) {
+	if (len < NP2_AUTOC_SORT_KEY_LENGTH) {
 		high = bit_zero_high_u32(high, len*8);
 	}
 	high = bswap32(high);
@@ -124,8 +124,8 @@ struct WordNode {
 #if NP2_AUTOC_USE_WORD_POINTER
 	char *word;
 #endif
-#if NP2_AUTOC_USE_STRING_ORDER
-	UINT order;
+#if NP2_AUTOC_CACHE_SORT_KEY
+	UINT sortKey;
 #endif
 	UINT len;
 	UINT level;
@@ -165,8 +165,8 @@ static inline void WordList_AddBuffer(struct WordList *pWList) {
 
 void WordList_AddWord(struct WordList *pWList, LPCSTR pWord, UINT len) {
 	struct WordNode *root = pWList->pListHead;
-#if NP2_AUTOC_USE_STRING_ORDER
-	const UINT order = (pWList->iStartLen > NP2_AUTOC_ORDER_LENGTH) ? 0 : pWList->WL_OrderFunc(pWord, len);
+#if NP2_AUTOC_CACHE_SORT_KEY
+	const UINT sortKey = (pWList->iStartLen > NP2_AUTOC_SORT_KEY_LENGTH) ? 0 : pWList->WL_SortKeyFunc(pWord, len);
 #endif
 	if (root == NULL) {
 		struct WordNode *node = WordList_AddNode(pWList);
@@ -175,8 +175,8 @@ void WordList_AddWord(struct WordList *pWList, LPCSTR pWord, UINT len) {
 #if NP2_AUTOC_USE_WORD_POINTER
 		node->word = word;
 #endif
-#if NP2_AUTOC_USE_STRING_ORDER
-		node->order = order;
+#if NP2_AUTOC_CACHE_SORT_KEY
+		node->sortKey = sortKey;
 #endif
 		node->len = len;
 		node->level = 1;
@@ -190,9 +190,9 @@ void WordList_AddWord(struct WordList *pWList, LPCSTR pWord, UINT len) {
 		// find a spot and save the path
 		for (;;) {
 			path[top++] = iter;
-#if NP2_AUTOC_USE_STRING_ORDER
-			dir = (int)(iter->order - order);
-			if (dir == 0 && (len > NP2_AUTOC_ORDER_LENGTH || iter->len > NP2_AUTOC_ORDER_LENGTH || pWList->bIgnoreCase)) {
+#if NP2_AUTOC_CACHE_SORT_KEY
+			dir = (int)(iter->sortKey - sortKey);
+			if (dir == 0 && (len > NP2_AUTOC_SORT_KEY_LENGTH || iter->len > NP2_AUTOC_SORT_KEY_LENGTH || pWList->bIgnoreCase)) {
 				dir = pWList->WL_strcmp(WordNode_GetWord(iter), pWord);
 			}
 #else
@@ -219,8 +219,8 @@ void WordList_AddWord(struct WordList *pWList, LPCSTR pWord, UINT len) {
 #if NP2_AUTOC_USE_WORD_POINTER
 		node->word = word;
 #endif
-#if NP2_AUTOC_USE_STRING_ORDER
-		node->order = order;
+#if NP2_AUTOC_CACHE_SORT_KEY
+		node->sortKey = sortKey;
 #endif
 		node->len = len;
 		node->level = 1;
@@ -292,18 +292,18 @@ void WordList_Init(struct WordList *pWList, LPCSTR pRoot, UINT iRootLen, bool bI
 	if (bIgnoreCase) {
 		pWList->WL_strcmp = strcmp;
 		pWList->WL_strncmp = _strnicmp;
-#if NP2_AUTOC_USE_STRING_ORDER
-		pWList->WL_OrderFunc = WordList_OrderCase;
+#if NP2_AUTOC_CACHE_SORT_KEY
+		pWList->WL_SortKeyFunc = WordList_SortKeyCase;
 #endif
 	} else {
 		pWList->WL_strcmp = strcmp;
 		pWList->WL_strncmp = strncmp;
-#if NP2_AUTOC_USE_STRING_ORDER
-		pWList->WL_OrderFunc = WordList_Order;
+#if NP2_AUTOC_CACHE_SORT_KEY
+		pWList->WL_SortKeyFunc = WordList_SortKey;
 #endif
 	}
-#if NP2_AUTOC_USE_STRING_ORDER
-	pWList->orderStart = pWList->WL_OrderFunc(pRoot, iRootLen);
+#if NP2_AUTOC_CACHE_SORT_KEY
+	pWList->sortKey = pWList->WL_SortKeyFunc(pRoot, iRootLen);
 	pWList->bIgnoreCase = bIgnoreCase;
 #endif
 
@@ -314,15 +314,15 @@ void WordList_Init(struct WordList *pWList, LPCSTR pRoot, UINT iRootLen, bool bI
 static inline void WordList_UpdateRoot(struct WordList *pWList, LPCSTR pRoot, UINT iRootLen) {
 	pWList->pWordStart = pRoot;
 	pWList->iStartLen = iRootLen;
-#if NP2_AUTOC_USE_STRING_ORDER
-	pWList->orderStart = pWList->WL_OrderFunc(pRoot, iRootLen);
+#if NP2_AUTOC_CACHE_SORT_KEY
+	pWList->sortKey = pWList->WL_SortKeyFunc(pRoot, iRootLen);
 #endif
 }
 
 static inline bool WordList_StartsWith(const struct WordList *pWList, LPCSTR pWord) {
-#if NP2_AUTOC_USE_STRING_ORDER
-	if (pWList->iStartLen <= NP2_AUTOC_ORDER_LENGTH) {
-		return pWList->orderStart == pWList->WL_OrderFunc(pWord, pWList->iStartLen);
+#if NP2_AUTOC_CACHE_SORT_KEY
+	if (pWList->iStartLen <= NP2_AUTOC_SORT_KEY_LENGTH) {
+		return pWList->sortKey == pWList->WL_SortKeyFunc(pWord, pWList->iStartLen);
 	}
 #endif
 	return pWList->WL_strncmp(pWList->pWordStart, pWord, pWList->iStartLen) == 0;
@@ -550,6 +550,10 @@ static inline bool IsGenericTypeStyle(int style) {
 	return BitTestEx(GenericTypeStyleMask, style);
 }
 
+static inline bool IsCommentStyle(int style) {
+	return BitTestEx(CommentStyleMask, style);
+}
+
 bool IsAutoCompletionWordCharacter(uint32_t ch) {
 	if (ch < 0x80) {
 		return IsDocWordChar(ch);
@@ -636,6 +640,8 @@ enum {
 	// see LexInno.cxx
 	InnoLineStatePreprocessor = 1 << 5,
 	InnoLineStateCodeSection = 1 << 6,
+	// see LexVim.cxx
+	VimLineStateMaskVim9Script = 1 << 3,
 };
 
 //KeywordIndex++Autogenerated -- start of section automatically generated
@@ -676,8 +682,8 @@ enum {
 	JavaScriptKeywordIndex_JSDoc = 10,
 	JuliaKeywordIndex_CodeFolding = 1,
 	JuliaKeywordIndex_Macro = 6,
-	KotlinKeywordIndex_Annotation = 4,
-	KotlinKeywordIndex_KDoc = 6,
+	KotlinKeywordIndex_Annotation = 6,
+	KotlinKeywordIndex_KDoc = 8,
 	NSISKeywordIndex_PredefinedVariable = 5,
 	PHPKeywordIndex_PredefinedVariable = 4,
 	PHPKeywordIndex_Phpdoc = 11,
@@ -782,38 +788,24 @@ static void AutoC_AddDocWord(struct WordList *pWList, const uint32_t ignoredStyl
 	const int iRootLen = pWList->iStartLen;
 
 	// optimization for small string
-	char onStack[128];
+	char onStack[64];
 	char *pFind;
-	if (iRootLen * 2 + 32 < (int)sizeof(onStack)) {
+	if (iRootLen + 2 <= (int)sizeof(onStack)) {
 		memset(onStack, 0, sizeof(onStack));
 		pFind = onStack;
 	} else {
-		pFind = (char *)NP2HeapAlloc(iRootLen * 2 + 32);
+		pFind = (char *)NP2HeapAlloc(iRootLen + 2);
 	}
 
-	if (prefix) {
-		char buf[2] = { prefix, '\0' };
-		EscapeRegex(pFind, buf);
-	}
-	if (iRootLen == 0) {
-		// find an identifier
-		strcat(pFind, "[A-Za-z0-9_]");
-		strcat(pFind, "\\i?");
-	} else {
-		if (IsDefaultWordChar((uint8_t)pRoot[0])) {
-			strcat(pFind, "\\h");
-		}
-		EscapeRegex(pFind + strlen(pFind), pRoot);
-		if (IsDefaultWordChar((uint8_t)pRoot[iRootLen - 1])) {
-			strcat(pFind, "\\i?");
-		} else {
-			strcat(pFind, "\\i");
-		}
+	pFind[0] = prefix;
+	memcpy(pFind + (prefix != '\0'), pRoot, iRootLen);
+	int findFlag = (bIgnoreCase ? SCFIND_NONE : SCFIND_MATCHCASE) | SCFIND_MATCH_TO_WORD_END;
+	if (IsDefaultWordChar((uint8_t)pRoot[0])) {
+		findFlag |= SCFIND_WORDSTART;
 	}
 
 	const Sci_Position iCurrentPos = SciCall_GetCurrentPos() - iRootLen - (prefix ? 1 : 0);
 	const Sci_Position iDocLen = SciCall_GetLength();
-	const int findFlag = SCFIND_REGEXP | SCFIND_POSIX | (bIgnoreCase ? 0 : SCFIND_MATCHCASE);
 	struct Sci_TextToFindFull ft = { { 0, iDocLen }, pFind, { 0, 0 } };
 
 	Sci_Position iPosFind = SciCall_FindTextFull(findFlag, &ft);
@@ -1641,14 +1633,14 @@ static bool EditCompleteWordCore(int iCondition, bool autoInsert) {
 			retry = false;
 		}
 	} else {
-		if ((!(autoCompletionConfig.fCompleteScope & AutoCompleteScope_Commont) && BitTestEx(CommentStyleMask, iCurrentStyle))
+		if ((!(autoCompletionConfig.fCompleteScope & AutoCompleteScope_Commont) && IsCommentStyle(iCurrentStyle))
 			|| (!(autoCompletionConfig.fCompleteScope & AutoCompleteScope_String) && BitTestEx(AllStringStyleMask, iCurrentStyle))
 			|| (!(autoCompletionConfig.fCompleteScope & AutoCompleteScope_PlainText) && BitTestEx(PlainTextStyleMask, iCurrentStyle))) {
 			retry = false;
 		}
 		if (retry && bScanWordsInDocument) {
 			memcpy(ignoredStyleMask, IgnoreWordStyleMask, sizeof(IgnoreWordStyleMask));
-			if (!(autoCompletionConfig.fScanWordScope & AutoCompleteScope_Commont) && !BitTestEx(CommentStyleMask, iCurrentStyle)) {
+			if (!(autoCompletionConfig.fScanWordScope & AutoCompleteScope_Commont) && !IsCommentStyle(iCurrentStyle)) {
 				for (UINT i = 0; i < 8; i++) {
 					ignoredStyleMask[i] |= CommentStyleMask[i];
 				}
@@ -1911,7 +1903,7 @@ static inline bool IsHtmlVoidTag(const char *word, int length) {
 	const char *p = StrStrIA(
 		// void elements
 		" area base basefont br col command embed frame hr img input isindex keygen link meta param source track wbr "
-		// end tag may omittd
+		// end tag can be omitted
 		" p "
 		, word);
 	return p != NULL && p[-1] == ' ' && p[length] == ' ';
@@ -2354,34 +2346,39 @@ void EditAutoIndent(void) {
 	}
 }
 
-void EditToggleCommentLine(void) {
+void EditToggleCommentLine(bool alternative) {
+	LPCWSTR pwszComment = NULL;
 	switch (pLexCurrent->rid) {
 	case NP2LEX_ASM: {
-		LPCWSTR ch;
 		switch (autoCompletionConfig.iAsmLineCommentChar) {
 		case AsmLineCommentChar_Semicolon:
 		default:
-			ch = L";";
+			pwszComment = L";";
 			break;
 		case AsmLineCommentChar_Sharp:
-			ch = L"# ";
+			pwszComment = L"# ";
 			break;
 		case AsmLineCommentChar_Slash:
-			ch = L"//";
+			pwszComment = L"//";
 			break;
 		case AsmLineCommentChar_At:
-			ch = L"@ ";
+			pwszComment = L"@ ";
 			break;
 		}
-		EditToggleLineComments(ch, false);
 	}
 	break;
 
 	case NP2LEX_BASH:
 		if (np2LexLangIndex == IDM_LEXER_M4) {
-			EditToggleLineComments(L"dnl ", false);
+			pwszComment = L"dnl ";
 		} else {
-			EditToggleLineComments(L"#", false);
+			pwszComment = L"#";
+		}
+		break;
+
+	case NP2LEX_CSS:
+		if (np2LexLangIndex > IDM_LEXER_CSS) {
+			pwszComment = L"//";
 		}
 		break;
 
@@ -2391,17 +2388,17 @@ void EditToggleCommentLine(void) {
 		const HtmlTextBlock block = GetCurrentHtmlTextBlock(pLexCurrent->iLexer);
 		switch (block) {
 		case HtmlTextBlock_VBScript:
-			EditToggleLineComments(L"'", false);
+			pwszComment = L"'";
 			break;
 
 		case HtmlTextBlock_Python:
-			EditToggleLineComments(L"#", false);
+			pwszComment = L"#";
 			break;
 
 		case HtmlTextBlock_CDATA:
 		case HtmlTextBlock_JavaScript:
 		case HtmlTextBlock_PHP:
-			EditToggleLineComments(L"//", false);
+			pwszComment = L"//";
 			break;
 
 		default:
@@ -2410,27 +2407,36 @@ void EditToggleCommentLine(void) {
 	}
 	break;
 
-	case NP2LEX_INNOSETUP: {
+	case NP2LEX_INNOSETUP:
+	case NP2LEX_VIM: {
 		const int lineState = SciCall_GetLineState(SciCall_LineFromPosition(SciCall_GetSelectionStart()));
-		if (lineState & InnoLineStateCodeSection) {
-			EditToggleLineComments(L"//", false);
+		if (pLexCurrent->rid == NP2LEX_INNOSETUP) {
+			if (lineState & InnoLineStateCodeSection) {
+				pwszComment = L"//";
+			} else {
+				pwszComment = L";";
+			}
 		} else {
-			EditToggleLineComments(L";", false);
+			if (lineState & VimLineStateMaskVim9Script) {
+				pwszComment = L"#";
+			} else {
+				pwszComment = L"\"";
+			}
 		}
 	}
 	break;
 
 	case NP2LEX_MATLAB:
 		if (np2LexLangIndex == IDM_LEXER_SCILAB) {
-			EditToggleLineComments(L"//", false);
+			pwszComment = L"//";
 		} else {
-			EditToggleLineComments(L"%", false);
+			pwszComment = L"%";
 		}
 		break;
 
 //CommentLine++Autogenerated -- start of section automatically generated
 	case NP2LEX_ABAQUS:
-		EditToggleLineComments(L"**", false);
+		pwszComment = L"**";
 		break;
 
 	case NP2LEX_ACTIONSCRIPT:
@@ -2439,7 +2445,6 @@ void EditToggleCommentLine(void) {
 	case NP2LEX_CIL:
 	case NP2LEX_CPP:
 	case NP2LEX_CSHARP:
-	case NP2LEX_CSS:
 	case NP2LEX_DART:
 	case NP2LEX_DLANG:
 	case NP2LEX_FSHARP:
@@ -2459,13 +2464,14 @@ void EditToggleCommentLine(void) {
 	case NP2LEX_SWIFT:
 	case NP2LEX_TYPESCRIPT:
 	case NP2LEX_VERILOG:
+	case NP2LEX_WINHEX:
 	case NP2LEX_ZIG:
-		EditToggleLineComments(L"//", false);
+		pwszComment = L"//";
 		break;
 
 	case NP2LEX_APDL:
 	case NP2LEX_FORTRAN:
-		EditToggleLineComments(L"!", false);
+		pwszComment = L"!";
 		break;
 
 	case NP2LEX_AUTOHOTKEY:
@@ -2474,7 +2480,7 @@ void EditToggleCommentLine(void) {
 	case NP2LEX_LISP:
 	case NP2LEX_LLVM:
 	case NP2LEX_REBOL:
-		EditToggleLineComments(L";", false);
+		pwszComment = L";";
 		break;
 
 	case NP2LEX_AVISYNTH:
@@ -2497,45 +2503,47 @@ void EditToggleCommentLine(void) {
 	case NP2LEX_TCL:
 	case NP2LEX_TOML:
 	case NP2LEX_YAML:
-		EditToggleLineComments(L"#", false);
+		pwszComment = L"#";
 		break;
 
 	case NP2LEX_BATCH:
-		EditToggleLineComments(L"@rem ", true);
+		pwszComment = L"@rem ";
 		break;
 
 	case NP2LEX_HASKELL:
 	case NP2LEX_LUA:
 	case NP2LEX_VHDL:
-		EditToggleLineComments(L"--", false);
+		pwszComment = L"--";
 		break;
 
 	case NP2LEX_LATEX:
-		EditToggleLineComments(L"%", false);
+		pwszComment = L"%";
 		break;
 
 	case NP2LEX_SQL:
-		EditToggleLineComments(L"-- ", false);
+		pwszComment = L"-- ";
 		break;
 
 	case NP2LEX_TEXINFO:
-		EditToggleLineComments(L"@c ", false);
+		pwszComment = L"@c ";
 		break;
 
 	case NP2LEX_VBSCRIPT:
 	case NP2LEX_VISUALBASIC:
-		EditToggleLineComments(L"\'", false);
-		break;
-
-	case NP2LEX_VIM:
-		EditToggleLineComments(L"\"", false);
+		pwszComment = L"\'";
 		break;
 
 	case NP2LEX_WASM:
-		EditToggleLineComments(L";;", false);
+		pwszComment = L";;";
 		break;
 
 //CommentLine--Autogenerated -- end of section automatically generated
+	}
+
+	if (pwszComment != NULL) {
+		EditToggleLineComments(pwszComment, autoCompletionConfig.fAutoInsertMask & AutoInsertMask_SpaceAfterComment);
+	} else if (!alternative) {
+		EditToggleCommentBlock(true);
 	}
 }
 
@@ -2563,15 +2571,91 @@ void EditEncloseSelectionNewLine(LPCWSTR pwszOpen, LPCWSTR pwszClose) {
 	EditEncloseSelection(start, end);
 }
 
-void EditToggleCommentBlock(void) {
+static bool EditUncommentBlock(LPCWSTR pwszOpen, LPCWSTR pwszClose, bool newLine) {
+	const Sci_Position iSelStart = SciCall_GetSelectionStart();
+	int style = SciCall_GetStyleIndexAt(iSelStart);
+	if (IsCommentStyle(style)) {
+		const Sci_Position iSelEnd = SciCall_GetSelectionEnd();
+		Sci_Position iStartPos = iSelStart;
+		Sci_Position iEndPos = iSelStart;
+		// find comment block, TODO: add IsBlockCommentStyle()
+		do {
+			++iEndPos;
+			style = SciCall_GetStyleIndexAt(iEndPos);
+		} while (IsCommentStyle(style));
+		if (iEndPos < iSelEnd) {
+			return false;
+		}
+		do {
+			--iStartPos;
+			style = SciCall_GetStyleIndexAt(iStartPos);
+		} while (IsCommentStyle(style));
+
+		const UINT cpEdit = SciCall_GetCodePage();
+		char mszOpen[64] = "";
+		char mszClose[64] = "";
+		WideCharToMultiByte(cpEdit, 0, pwszOpen, -1, mszOpen, COUNTOF(mszOpen), NULL, NULL);
+		WideCharToMultiByte(cpEdit, 0, pwszClose, -1, mszClose, COUNTOF(mszClose), NULL, NULL);
+
+		// find inner most comment block for current selection
+		struct Sci_TextToFindFull ttfClose = { { iSelStart, iEndPos }, mszClose, { 0, 0 } };
+		iEndPos = SciCall_FindTextFull(SCFIND_NONE, &ttfClose);
+		if (iEndPos < 0) {
+			return false;
+		}
+
+		struct Sci_TextToFindFull ttfOpen = { { iSelEnd, iStartPos + 1 }, mszOpen, { 0, 0 } };
+		iStartPos = SciCall_FindTextFull(SCFIND_NONE, &ttfOpen);
+		if (iStartPos < 0 || ttfOpen.chrgText.cpMax > iEndPos) {
+			return false;
+		}
+
+		if (newLine) {
+			const Sci_Line iStartLine = SciCall_LineFromPosition(iStartPos);
+			const Sci_Line iEndLine = SciCall_LineFromPosition(iEndPos);
+			if (iStartLine == iEndLine) {
+				return false;
+			}
+			if (SciCall_GetLineIndentPosition(iStartLine) != iStartPos
+				|| SciCall_GetLineIndentPosition(iEndLine) != iEndPos) {
+				return false;
+			}
+			iStartPos = SciCall_PositionFromLine(iStartLine);
+			iEndPos = SciCall_PositionFromLine(iEndLine);
+			ttfOpen.chrgText.cpMax = SciCall_PositionFromLine(iStartLine + 1);
+			ttfClose.chrgText.cpMax = SciCall_PositionFromLine(iEndLine + 1);
+		}
+
+		SciCall_BeginUndoAction();
+		SciCall_DeleteRange(iEndPos, ttfClose.chrgText.cpMax - iEndPos);
+		SciCall_DeleteRange(iStartPos, ttfOpen.chrgText.cpMax - iStartPos);
+		SciCall_EndUndoAction();
+		return true;
+	}
+	return false;
+}
+
+void EditToggleCommentBlock(bool alternative) {
+	LPCWSTR pwszOpen = NULL;
+	LPCWSTR pwszClose = NULL;
+	bool newLine = false;
 	switch (pLexCurrent->rid) {
 	case NP2LEX_BLOCKDIAG:
-	case NP2LEX_GRAPHVIZ: {
+	case NP2LEX_GRAPHVIZ:
+	case NP2LEX_INNOSETUP: {
 		const int lineState = SciCall_GetLineState(SciCall_LineFromPosition(SciCall_GetSelectionStart()));
-		if (lineState) {
-			EditEncloseSelection(L"<!--", L"-->");
+		if (pLexCurrent->rid == NP2LEX_INNOSETUP) {
+			if (lineState & InnoLineStateCodeSection) {
+				pwszOpen = L"{"; pwszClose = L"}";
+			} else if (lineState & InnoLineStatePreprocessor) {
+				pwszOpen = L"/*"; pwszClose = L"*/";
+			}
 		} else {
-			EditEncloseSelection(L"/*", L"*/");
+			if (lineState) {
+				pwszOpen = L"<!--"; pwszClose = L"-->";
+			} else {
+				pwszOpen = L"/*"; pwszClose = L"*/";
+			}
 		}
 	} break;
 
@@ -2581,20 +2665,20 @@ void EditToggleCommentBlock(void) {
 		const HtmlTextBlock block = GetCurrentHtmlTextBlock(pLexCurrent->iLexer);
 		switch (block) {
 		case HtmlTextBlock_Tag:
-			EditEncloseSelection(L"<!--", L"-->");
+			pwszOpen = L"<!--"; pwszClose = L"-->";
 			break;
 
 		case HtmlTextBlock_CDATA:
 		case HtmlTextBlock_JavaScript:
 		case HtmlTextBlock_PHP:
 		case HtmlTextBlock_CSS:
-			EditEncloseSelection(L"/*", L"*/");
+			pwszOpen = L"/*"; pwszClose = L"*/";
 			break;
 
 		case HtmlTextBlock_SGML:
 			// A brief SGML tutorial
 			// https://www.w3.org/TR/WD-html40-970708/intro/sgmltut.html
-			EditEncloseSelection(L"--", L"--");
+			pwszOpen = L"--"; pwszClose = L"--";
 			break;
 
 		default:
@@ -2603,21 +2687,11 @@ void EditToggleCommentBlock(void) {
 	}
 	break;
 
-	case NP2LEX_INNOSETUP: {
-		const int lineState = SciCall_GetLineState(SciCall_LineFromPosition(SciCall_GetSelectionStart()));
-		if (lineState & InnoLineStateCodeSection) {
-			EditEncloseSelection(L"{", L"}");
-		} else if (lineState & InnoLineStatePreprocessor) {
-			EditEncloseSelection(L"/*", L"*/");
-		}
-	}
-	break;
-
 	case NP2LEX_MATLAB:
 		if (np2LexLangIndex == IDM_LEXER_SCILAB) {
-			EditEncloseSelection(L"/*", L"*/");
+			pwszOpen = L"/*"; pwszClose = L"*/";
 		} else {
-			EditEncloseSelectionNewLine(L"%{", L"%}");
+			pwszOpen = L"%{"; pwszClose = L"%}"; newLine = true;
 		}
 		break;
 
@@ -2650,89 +2724,92 @@ void EditToggleCommentBlock(void) {
 	case NP2LEX_TYPESCRIPT:
 	case NP2LEX_VERILOG:
 	case NP2LEX_VHDL:
-		EditEncloseSelection(L"/*", L"*/");
+		pwszOpen = L"/*"; pwszClose = L"*/";
 		break;
 
 	case NP2LEX_AUTOIT3:
-		EditEncloseSelectionNewLine(L"#cs", L"#ce");
+		pwszOpen = L"#cs"; pwszClose = L"#ce"; newLine = true;
 		break;
 
 	case NP2LEX_CMAKE:
-		EditEncloseSelection(L"#[[", L"]]");
+		pwszOpen = L"#[["; pwszClose = L"]]";
 		break;
 
 	case NP2LEX_COFFEESCRIPT:
-		EditEncloseSelection(L"###", L"###");
-		break;
-
-	case NP2LEX_FORTRAN:
-		EditEncloseSelectionNewLine(L"#if 0", L"#endif");
+		pwszOpen = L"###"; pwszClose = L"###";
 		break;
 
 	case NP2LEX_FSHARP:
 	case NP2LEX_MATHEMATICA:
 	case NP2LEX_OCAML:
-		EditEncloseSelection(L"(*", L"*)");
+		pwszOpen = L"(*"; pwszClose = L"*)";
 		break;
 
 	case NP2LEX_HASKELL:
-		EditEncloseSelection(L"{-", L"-}");
+		pwszOpen = L"{-"; pwszClose = L"-}";
 		break;
 
 	case NP2LEX_JAMFILE:
 	case NP2LEX_LISP:
-		EditEncloseSelection(L"#|", L"|#");
+		pwszOpen = L"#|"; pwszClose = L"|#";
 		break;
 
 	case NP2LEX_JULIA:
-		EditEncloseSelection(L"#=", L"=#");
+		pwszOpen = L"#="; pwszClose = L"=#";
 		break;
 
 	case NP2LEX_LATEX:
-		EditEncloseSelectionNewLine(L"\\begin{comment}", L"\\end{comment}");
+		pwszOpen = L"\\begin{comment}"; pwszClose = L"\\end{comment}"; newLine = true;
 		break;
 
 	case NP2LEX_LUA:
-		EditEncloseSelection(L"--[[", L"--]]");
+		pwszOpen = L"--[["; pwszClose = L"--]]";
 		break;
 
 	case NP2LEX_MARKDOWN:
-		EditEncloseSelection(L"<!--", L"-->");
+		pwszOpen = L"<!--"; pwszClose = L"-->";
 		break;
 
 	case NP2LEX_NIM:
-		EditEncloseSelection(L"#[", L"]#");
+		pwszOpen = L"#["; pwszClose = L"]#";
 		break;
 
 	case NP2LEX_PASCAL:
-		EditEncloseSelection(L"{", L"}");
+		pwszOpen = L"{"; pwszClose = L"}";
 		break;
 
 	case NP2LEX_POWERSHELL:
-		EditEncloseSelection(L"<#", L"#>");
+		pwszOpen = L"<#"; pwszClose = L"#>";
 		break;
 
 	case NP2LEX_REBOL:
-		EditEncloseSelectionNewLine(L"comment {", L"}");
-		break;
-
-	case NP2LEX_RLANG:
-		EditEncloseSelectionNewLine(L"if (FALSE) {", L"}");
-		break;
-
-	case NP2LEX_TCL:
-		EditEncloseSelectionNewLine(L"if (0) {", L"}");
+		pwszOpen = L"comment {"; pwszClose = L"}"; newLine = true;
 		break;
 
 	case NP2LEX_TEXINFO:
-		EditEncloseSelectionNewLine(L"@ignore", L"@end ignore");
+		pwszOpen = L"@ignore"; pwszClose = L"@end ignore"; newLine = true;
 		break;
 
 	case NP2LEX_WASM:
-		EditEncloseSelection(L"(;", L";)");
+		pwszOpen = L"(;"; pwszClose = L";)";
 		break;
 
 //CommentBlock--Autogenerated -- end of section automatically generated
+	}
+
+	if (pwszOpen != NULL) {
+		if (!EditUncommentBlock(pwszOpen, pwszClose, newLine)) {
+			if (newLine) {
+				EditEncloseSelectionNewLine(pwszOpen, pwszClose);
+			} else {
+				if (alternative) {
+					SciCall_SetSelectionMode(SC_SEL_LINES);
+				}
+				EditEncloseSelection(pwszOpen, pwszClose);
+			}
+		}
+	} else if (!alternative) {
+		EditToggleCommentLine(true);
 	}
 }
 
@@ -2843,6 +2920,7 @@ void InitAutoCompletionCache(LPCEDITLEXER pLex) {
 	case NP2LEX_LISP:
 	case NP2LEX_SMALI:
 	case NP2LEX_TEXTFILE:
+	case NP2LEX_WINHEX:
 		CurrentWordCharSet['-' >> 5] |= (1 << ('-' & 31));
 		break;
 
@@ -3077,6 +3155,7 @@ void InitAutoCompletionCache(LPCEDITLEXER pLex) {
 	case NP2LEX_MARKDOWN:
 		CommentStyleMask[SCE_H_COMMENT >> 5] |= (1U << (SCE_H_COMMENT & 31));
 		CommentStyleMask[SCE_H_SGML_COMMENT >> 5] |= (1U << (SCE_H_SGML_COMMENT & 31));
+		CommentStyleMask[STYLE_COMMENT_LINK >> 5] |= (1U << (STYLE_COMMENT_LINK & 31));
 		AllStringStyleMask[SCE_H_DOUBLESTRING >> 5] |= (1U << (SCE_H_DOUBLESTRING & 31));
 		AllStringStyleMask[SCE_H_SINGLESTRING >> 5] |= (1U << (SCE_H_SINGLESTRING & 31));
 		AllStringStyleMask[SCE_H_SGML_DOUBLESTRING >> 5] |= (1U << (SCE_H_SGML_DOUBLESTRING & 31));

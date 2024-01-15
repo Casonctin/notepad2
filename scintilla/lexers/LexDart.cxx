@@ -182,7 +182,7 @@ void ColouriseDartDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initSt
 							if (visibleChars == sc.LengthCurrent()) {
 								lineStateLineType = DartLineStateMaskImport;
 							}
-						} else if (StrEqualsAny(s, "class", "extends", "implements", "new", "throw", "as", "is")) {
+						} else if (StrEqualsAny(s, "class", "extends", "implements", "new", "throw", "with", "as", "is", "on")) {
 							kwType = KeywordType::Class;
 						} else if (StrEqual(s, "enum")) {
 							kwType = KeywordType::Enum;
@@ -228,6 +228,8 @@ void ColouriseDartDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initSt
 								// type<type>
 								// type<type?>
 								// type<type<type>>
+								// type<type, type>
+								// class type implements interface, interface {}
 								// type identifier
 								// type? identifier
 								sc.ChangeState(SCE_DART_CLASS);
@@ -535,6 +537,7 @@ void FoldDartDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyle, 
 		}
 		if (startPos == lineStartNext) {
 			const FoldLineState foldNext(styler.GetLineState(lineCurrent + 1));
+			levelNext = sci::max(levelNext, SC_FOLDLEVELBASE);
 			if (foldCurrent.lineComment) {
 				levelNext += foldNext.lineComment - foldPrev.lineComment;
 			} else if (foldCurrent.packageImport) {
@@ -555,9 +558,7 @@ void FoldDartDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyle, 
 			if (levelUse < levelNext) {
 				lev |= SC_FOLDLEVELHEADERFLAG;
 			}
-			if (lev != styler.LevelAt(lineCurrent)) {
-				styler.SetLevel(lineCurrent, lev);
-			}
+			styler.SetLevel(lineCurrent, lev);
 
 			lineCurrent++;
 			lineStartNext = styler.LineStart(lineCurrent + 1);
