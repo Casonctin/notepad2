@@ -344,6 +344,9 @@ void ColouriseJavaDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initSt
 								sc.ChangeState(SCE_JAVA_CLASS);
 							}
 						}
+					} else if (sc.chNext == '\"') {
+						// template processor
+						sc.ChangeState(SCE_JAVA_FUNCTION);
 					}
 					if (sc.state != SCE_JAVA_WORD && sc.ch != '.') {
 						kwType = KeywordType::None;
@@ -533,13 +536,11 @@ void ColouriseJavaDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initSt
 			} else if (IsAGraphic(sc.ch) && sc.ch != '\\') {
 				sc.SetState(SCE_JAVA_OPERATOR);
 				if (!nestedState.empty()) {
+					sc.ChangeState(SCE_JAVA_OPERATOR2);
 					if (sc.ch == '{') {
 						nestedState.push_back(SCE_JAVA_DEFAULT);
 					} else if (sc.ch == '}') {
 						const int outerState = TakeAndPop(nestedState);
-						if (outerState != SCE_JAVA_DEFAULT) {
-							sc.ChangeState(SCE_JAVA_OPERATOR2);
-						}
 						sc.ForwardSetState(outerState);
 						continue;
 					}
@@ -579,23 +580,6 @@ struct FoldLineState {
 	}
 };
 
-constexpr bool IsStreamCommentStyle(int style) noexcept {
-	return style == SCE_JAVA_COMMENTBLOCK
-		|| style == SCE_JAVA_COMMENTBLOCKDOC
-		|| style == SCE_JAVA_COMMENTTAGAT
-		|| style == SCE_JAVA_COMMENTTAGHTML
-		|| style == SCE_JAVA_TASKMARKER;
-}
-
-constexpr bool IsMultilineStringStyle(int style) noexcept {
-	return style == SCE_JAVA_TRIPLE_STRING
-		|| style == SCE_JAVA_TRIPLE_TEMPLATE
-		|| style == SCE_JAVA_OPERATOR2
-		|| style == SCE_JAVA_ESCAPECHAR
-		|| style == SCE_JAVA_FORMAT_SPECIFIER
-		|| style == SCE_JAVA_PLACEHOLDER;
-}
-
 void FoldJavaDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyle, LexerWordList /*keywordLists*/, Accessor &styler) {
 	const Sci_PositionU endPos = startPos + lengthDoc;
 	Sci_Line lineCurrent = styler.GetLine(startPos);
@@ -627,23 +611,18 @@ void FoldJavaDoc(Sci_PositionU startPos, Sci_Position lengthDoc, int initStyle, 
 		switch (style) {
 		case SCE_JAVA_COMMENTBLOCK:
 		case SCE_JAVA_COMMENTBLOCKDOC:
-			if (!IsStreamCommentStyle(stylePrev)) {
-				levelNext++;
-			} else if (!IsStreamCommentStyle(styleNext)) {
-				levelNext--;
-			}
-			break;
-
 		case SCE_JAVA_TRIPLE_STRING:
 		case SCE_JAVA_TRIPLE_TEMPLATE:
-			if (!IsMultilineStringStyle(stylePrev)) {
+			if (style != stylePrev) {
 				levelNext++;
-			} else if (!IsMultilineStringStyle(styleNext)) {
+			}
+			if (style != styleNext) {
 				levelNext--;
 			}
 			break;
 
-		case SCE_JAVA_OPERATOR: {
+		case SCE_JAVA_OPERATOR:
+		case SCE_JAVA_OPERATOR2: {
 			const char ch = styler[startPos - 1];
 			if (ch == '{' || ch == '[' || ch == '(') {
 				levelNext++;
