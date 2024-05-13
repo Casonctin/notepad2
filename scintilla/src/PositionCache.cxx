@@ -7,8 +7,8 @@
 
 #include <cstddef>
 #include <cstdlib>
-#include <cassert>
 #include <cstdint>
+#include <cassert>
 #include <cstring>
 #include <cmath>
 #include <climits>
@@ -347,7 +347,7 @@ enum class WrapBreak {
 	Before = 1,
 	After = 2,
 	Both = 3,
-	Undefined,
+	Undefined = 4,
 };
 
 constexpr uint8_t ASCIIWrapBreakTable[128] = {
@@ -822,7 +822,7 @@ LineLayout *LineLayoutCache::Retrieve(Sci::Line lineNumber, Sci::Line lineCaret,
 namespace {
 
 // Simply pack the (maximum 4) character bytes into an int
-#if 0
+#if 0 //! use the loop code to pass AddressSanitizer
 constexpr unsigned int KeyFromString(std::string_view charBytes) noexcept {
 	PLATFORM_ASSERT(charBytes.length() <= 4);
 	unsigned int k = 0;

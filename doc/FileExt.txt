@@ -138,6 +138,7 @@ Web Source Code
 	asp				Active Server Page
 	aspx			Active Server Page Extended File
 	jsp				Java Server Page
+	rhtml			ERB, HTML with embedded Ruby
 	mht				MHTML Web Archive
 	htd				Adobe ExtendScript HTML file
 	htt				Hypertext Template File
@@ -282,8 +283,11 @@ Fortran Source
 	f95
 	f03
 	f08
+	f18
+	f77
 	f2k
 	hf
+	cuf
 
 F# Source
 	fs

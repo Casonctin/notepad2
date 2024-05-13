@@ -64,7 +64,7 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* [Dart](tools/lang/Dart.dart), up to Dart 3.3.
 	* Diff/Patch File
 	* [F#](tools/lang/FSharp.fs), up to F# 8.0.
-	* [Fortran](tools/lang/Fortran.f), up to Fortran 2018.
+	* [Fortran](tools/lang/Fortran.f), up to Fortran 2023.
 	* [GN Build](tools/lang/GN.gn), up to GN 2019-03-13.
 	* [Go](tools/lang/Go.go), up to Go 1.21.
 		* [Go+ (GoPlus)](https://goplus.org/) and the Q language
@@ -97,7 +97,7 @@ Latest development builds (artifacts in Release configuration for each compiler 
 		* Borland bmake
 		* qmake
 		* ninja
-	* Markdown, up to [CommonMark](https://spec.commonmark.org/) 0.30, with following extensions:
+	* Markdown, up to [CommonMark](https://spec.commonmark.org/) 0.31, with following extensions:
 		* [GitHub Flavored Markdown](https://github.github.com/gfm/)
 		* [GitLab Flavored Markdown](https://docs.gitlab.com/ee/user/markdown.html)
 		* [Pandoc’s Markdown](https://pandoc.org/MANUAL.html#pandocs-markdown)
@@ -149,7 +149,7 @@ Latest development builds (artifacts in Release configuration for each compiler 
 		* SGML and DTD
 		* Apple Property List
 	* [YAML Document](https://yaml.org/)
-	* [Zig](tools/lang/Zig.zig), up to Zig 0.11.
+	* [Zig](tools/lang/Zig.zig), up to Zig 0.12.
 	* Many Others
 * Toggle fold for specific level, shortcuts: <kbd>Alt</kbd>+<kbd>Number</kbd>
 * Toggle fold for current block without scrolling back to the block start line, shortcut: <kbd>Alt</kbd>+<kbd>C</kbd>, or context menu "Toggle Fold"
