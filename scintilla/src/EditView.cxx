@@ -781,7 +781,7 @@ void EditView::UpdateBidiData(const EditModel &model, const ViewStyle &vstyle, L
 
 		for (int charsInLine = 0; charsInLine < ll->numCharsInLine; charsInLine++) {
 			const int charWidth = UTF8DrawBytes(&ll->chars[charsInLine], ll->numCharsInLine - charsInLine);
-			const Representation *repr = model.reprs.RepresentationFromCharacter(std::string_view(&ll->chars[charsInLine], charWidth));
+			const Representation *repr = model.reprs->RepresentationFromCharacter(std::string_view(&ll->chars[charsInLine], charWidth));
 
 			ll->bidiData->widthReprs[charsInLine] = 0.0f;
 			if (repr && ll->chars[charsInLine] != '\t') {
@@ -1197,12 +1197,12 @@ void EditView::DrawEOL(Surface *surface, const EditModel &model, const ViewStyle
 			std::string_view ctrlChar;
 			Sci::Position widthBytes = 1;
 			RepresentationAppearance appearance = RepresentationAppearance::Blob;
-			const Representation *repr = model.reprs.RepresentationFromCharacter(std::string_view(&ll->chars[eolPos], ll->numCharsInLine - eolPos));
+			const Representation *repr = model.reprs->RepresentationFromCharacter(std::string_view(&ll->chars[eolPos], ll->numCharsInLine - eolPos));
 			if (repr) {
 				// Representation of whole text
 				widthBytes = ll->numCharsInLine - eolPos;
 			} else {
-				repr = model.reprs.RepresentationFromCharacter(std::string_view(&ll->chars[eolPos], 1));
+				repr = model.reprs->RepresentationFromCharacter(std::string_view(&ll->chars[eolPos], 1));
 			}
 			if (repr) {
 				ctrlChar = repr->GetStringRep();
@@ -2972,10 +2972,10 @@ Sci::Position EditView::FormatRange(bool draw, CharacterRangeFull chrg, Scintill
 
 	// Turn off change history marker backgrounds
 	constexpr unsigned int changeMarkers =
-		1u << static_cast<unsigned int>(MarkerOutline::HistoryRevertedToOrigin) |
-		1u << static_cast<unsigned int>(MarkerOutline::HistorySaved) |
-		1u << static_cast<unsigned int>(MarkerOutline::HistoryModified) |
-		1u << static_cast<unsigned int>(MarkerOutline::HistoryRevertedToModified);
+		(1u << static_cast<unsigned int>(MarkerOutline::HistoryRevertedToOrigin)) |
+		(1u << static_cast<unsigned int>(MarkerOutline::HistorySaved)) |
+		(1u << static_cast<unsigned int>(MarkerOutline::HistoryModified)) |
+		(1u << static_cast<unsigned int>(MarkerOutline::HistoryRevertedToModified));
 	vsPrint.maskInLine &= ~changeMarkers;
 
 	const Sci::Line linePrintStart = model.pdoc->SciLineFromPosition(chrg.cpMin);

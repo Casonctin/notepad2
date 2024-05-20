@@ -41,7 +41,7 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* [AutoHotkey_L](tools/lang/AutoHotkey_L.ahk) and [AutoHotkey_H](tools/lang/AutoHotkey_H.ahk) Script, up to v2.
 	* [AutoIt3](tools/lang/AutoIt3.au3) Script, up to 3.3.16.
 	* [AviSynth Script](tools/lang/AviSynth.avs), up to AviSynth 2.6, AviSynth+ 3.6, GScript 1.1.
-	* [AWK](tools/lang/Awk.awk), up to GNU AWK 5.2.
+	* [AWK](tools/lang/Awk.awk), up to GNU AWK 5.3.
 	* [Batch Script](tools/lang/Batch.bat), [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#batch)
 	* [blockdiag](tools/lang/blockdiag.diag), seqdiag, actdiag and nwdiag
 	* [C#](tools/lang/CSharp.cs), up to C# 12.0. [Screenshots](https://github.com/zufuliu/notepad2/wiki/Screenshots#c)
@@ -166,7 +166,9 @@ Latest development builds (artifacts in Release configuration for each compiler 
 * Experimental support for RTL layout (GDI) and bidirectional (Direct2D), useful for Arabic and Hebrew
 * Support using fractional font size
 * Support full screen mode
+* Support compress & pretty for CSS, JavaScript, JSON and JSON5
 * Support copy as RTF
+* Support text transliteration
 * Support drag and drop file from Visual Studio, Android Studio, IntelliJ IDEA, etc.
 * Other various major or minor changes and tweaks
 
