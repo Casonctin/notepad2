@@ -106,6 +106,7 @@ WCHAR	szIniFile[MAX_PATH] = L"";
 static WCHAR szIniFile2[MAX_PATH] = L"";
 static bool bSaveSettings;
 bool	bSaveRecentFiles;
+int iMaxRecentFiles;
 static bool bSaveFindReplace;
 static WCHAR tchLastSaveCopyDir[MAX_PATH] = L"";
 WCHAR	tchOpenWithDir[MAX_PATH];
@@ -113,8 +114,6 @@ WCHAR	tchFavoritesDir[MAX_PATH];
 static WCHAR tchDefaultDir[MAX_PATH];
 static WCHAR tchToolbarButtons[MAX_TOOLBAR_BUTTON_CONFIG_BUFFER_SIZE];
 static LPWSTR tchToolbarBitmap = nullptr;
-static LPWSTR tchToolbarBitmapHot = nullptr;
-static LPWSTR tchToolbarBitmapDisabled = nullptr;
 static TitlePathNameFormat iPathNameFormat;
 bool	fWordWrapG;
 int		iWordWrapMode;
@@ -137,6 +136,7 @@ int		iZoomLevel = 100;
 bool	bShowBookmarkMargin;
 static bool bShowLineNumbers;
 static int bMarkOccurrences;
+int	iChangeHistoryMarker;
 EditAutoCompletionConfig autoCompletionConfig;
 int iSelectOption;
 static int iLineSelectionMode;
@@ -195,7 +195,7 @@ static bool bUseInlineIME;
 static int iBidirectional;
 static bool bShowMenu;
 static bool bShowToolbar;
-static bool bAutoScaleToolbar;
+static int iAutoScaleToolbar;
 static bool bShowStatusbar;
 static bool bInFullScreenMode;
 static int iFullScreenMode;
@@ -450,12 +450,6 @@ static inline int GetDefualtRenderingTechnology() noexcept {
 static void CleanUpResources(bool initialized) noexcept {
 	if (tchToolbarBitmap != nullptr) {
 		LocalFree(tchToolbarBitmap);
-	}
-	if (tchToolbarBitmapHot != nullptr) {
-		LocalFree(tchToolbarBitmapHot);
-	}
-	if (tchToolbarBitmapDisabled != nullptr) {
-		LocalFree(tchToolbarBitmapDisabled);
 	}
 	if (lpSchemeArg) {
 		LocalFree(lpSchemeArg);
@@ -1650,9 +1644,9 @@ static inline void UpdateDocumentModificationStatus() noexcept {
 
 void UpdateBookmarkMarginWidth() noexcept {
 	// see LineMarker::Draw() for minDim.
-	const int width = bShowBookmarkMargin ? SciCall_TextHeight() - 2 : 0;
+	const int width = (bShowBookmarkMargin || iChangeHistoryMarker != SC_CHANGE_HISTORY_DISABLED) ? SciCall_TextHeight() - 2 : 0;
 	// 16px for XPM bookmark symbol.
-	//const int width = bShowBookmarkMargin ? max(SciCall_TextHeight() - 2, 16) : 0;
+	//const int width = (bShowBookmarkMargin || iChangeHistoryMarker != SC_CHANGE_HISTORY_DISABLED) ? max(SciCall_TextHeight() - 2, 16) : 0;
 	SciCall_SetMarginWidth(MarginNumber_Bookmark, width);
 }
 
@@ -1884,9 +1878,9 @@ LRESULT MsgCreate(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 
 	// File MRU
 	const int flags = MRUFlags_FilePath | (static_cast<int>(flagRelativeFileMRU) * MRUFlags_RelativePath) | (static_cast<int>(flagPortableMyDocs) * MRUFlags_PortableMyDocs);
-	mruFile.Init(MRU_KEY_RECENT_FILES, flags);
-	mruFind.Init(MRU_KEY_RECENT_FIND, MRUFlags_QuoteValue);
-	mruReplace.Init(MRU_KEY_RECENT_REPLACE, MRUFlags_QuoteValue);
+	mruFile.Init(MRU_KEY_RECENT_FILES, iMaxRecentFiles, flags);
+	mruFind.Init(MRU_KEY_RECENT_FIND, MRU_MAXITEMS, MRUFlags_QuoteValue);
+	mruReplace.Init(MRU_KEY_RECENT_REPLACE, MRU_MAXITEMS, MRUFlags_QuoteValue);
 	return 0;
 }
 
@@ -1902,75 +1896,44 @@ void CreateBars(HWND hwnd, HINSTANCE hInstance) noexcept {
 
 	SendMessage(hwndToolbar, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
 
-	bool bExternalBitmap = false;
+	bool internalBitmap = false;
+	const int scale = iAutoScaleToolbar;
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+	const UINT dpi = (scale > USER_DEFAULT_SCREEN_DPI) ? (g_uCurrentDPI + scale - USER_DEFAULT_SCREEN_DPI) : g_uCurrentDPI;
+#else
+	const int dpi = g_uCurrentDPI;
+#endif
 	// Add normal Toolbar Bitmap
 	HBITMAP hbmp = nullptr;
 	if (tchToolbarBitmap != nullptr) {
 		hbmp = LoadBitmapFile(tchToolbarBitmap);
 	}
-	if (hbmp != nullptr) {
-		bExternalBitmap = true;
-	} else {
-		const int resource = GetBitmapResourceIdForCurrentDPI(IDB_TOOLBAR16);
+	if (hbmp == nullptr) {
+		internalBitmap = true;
+		const int resource = GetBitmapResourceIdForDPI(IDB_TOOLBAR16, dpi);
 		hbmp = static_cast<HBITMAP>(LoadImage(g_exeInstance, MAKEINTRESOURCE(resource), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
 	}
-	if (bAutoScaleToolbar) {
-		hbmp = ResizeImageForCurrentDPI(hbmp);
+	if (scale != 0) {
+		hbmp = ResizeImageForDPI(hbmp, dpi);
 	}
-	HBITMAP hbmpCopy = nullptr;
-	if (!bExternalBitmap) {
-		hbmpCopy = static_cast<HBITMAP>(CopyImage(hbmp, IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
-	}
+
 	BITMAP bmp;
 	GetObject(hbmp, sizeof(BITMAP), &bmp);
-
 	HIMAGELIST himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
 	ImageList_AddMasked(himl, hbmp, CLR_DEFAULT);
-	DeleteObject(hbmp);
 	SendMessage(hwndToolbar, TB_SETIMAGELIST, 0, AsInteger<LPARAM>(himl));
 
-	// Optionally add hot Toolbar Bitmap
-	if (tchToolbarBitmapHot != nullptr) {
-		hbmp = LoadBitmapFile(tchToolbarBitmapHot);
-		if (hbmp != nullptr) {
-			if (bAutoScaleToolbar) {
-				hbmp = ResizeImageForCurrentDPI(hbmp);
-			}
-			GetObject(hbmp, sizeof(BITMAP), &bmp);
-			himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
-			ImageList_AddMasked(himl, hbmp, CLR_DEFAULT);
-			DeleteObject(hbmp);
-			SendMessage(hwndToolbar, TB_SETHOTIMAGELIST, 0, AsInteger<LPARAM>(himl));
-		}
-	}
-
-	// Optionally add disabled Toolbar Bitmap
-	if (tchToolbarBitmapDisabled != nullptr) {
-		hbmp = LoadBitmapFile(tchToolbarBitmapDisabled);
-		if (hbmp != nullptr) {
-			if (bAutoScaleToolbar) {
-				hbmp = ResizeImageForCurrentDPI(hbmp);
-			}
-			GetObject(hbmp, sizeof(BITMAP), &bmp);
-			himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
-			ImageList_AddMasked(himl, hbmp, CLR_DEFAULT);
-			DeleteObject(hbmp);
-			SendMessage(hwndToolbar, TB_SETDISABLEDIMAGELIST, 0, AsInteger<LPARAM>(himl));
-			bExternalBitmap = true;
-		}
-	}
-
-	if (!bExternalBitmap) {
+	if (internalBitmap) {
+		HBITMAP hbmpCopy = static_cast<HBITMAP>(CopyImage(hbmp, IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
 		const bool fProcessed = BitmapAlphaBlend(hbmpCopy, GetSysColor(COLOR_3DFACE), 0x60);
 		if (fProcessed) {
 			himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
 			ImageList_AddMasked(himl, hbmpCopy, CLR_DEFAULT);
 			SendMessage(hwndToolbar, TB_SETDISABLEDIMAGELIST, 0, AsInteger<LPARAM>(himl));
 		}
-	}
-	if (hbmpCopy) {
 		DeleteObject(hbmpCopy);
 	}
+	DeleteObject(hbmp);
 
 #if NP2_ENABLE_CUSTOMIZE_TOOLBAR_LABELS
 	// Load toolbar labels
@@ -2233,6 +2196,9 @@ void ValidateUILangauge() noexcept {
 	case LANG_PORTUGUESE:
 		languageMenu = IDM_LANG_PORTUGUESE_BRAZIL;
 		break;
+	case LANG_RUSSIAN:
+		languageMenu = IDM_LANG_RUSSIAN;
+		break;
 	case LANG_NEUTRAL:
 	default:
 		languageMenu = IDM_LANG_USER_DEFAULT;
@@ -2273,6 +2239,9 @@ void SetUILanguage(int menu) noexcept {
 		break;
 	case IDM_LANG_PORTUGUESE_BRAZIL:
 		lang = MAKELANGID(LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN);
+		break;
+	case IDM_LANG_RUSSIAN:
+		lang = MAKELANGID(LANG_RUSSIAN, SUBLANG_DEFAULT);
 		break;
 	}
 
@@ -2419,7 +2388,6 @@ void MsgInitMenu(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 		IDM_EDIT_FIND,
 		IDM_EDIT_FINDMATCHINGBRACE,
 		IDM_EDIT_FINDNEXT,
-		IDM_EDIT_FINDNEXT,
 		IDM_EDIT_FINDPREV,
 		IDM_EDIT_GOTOLINE,
 		IDM_EDIT_GOTO_BLOCK_END,
@@ -2498,6 +2466,7 @@ void MsgInitMenu(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 		IDM_EDIT_SPLITLINES,
 		IDM_EDIT_TITLECASE,
 		IDM_EDIT_UNESCAPECCHARS,
+		IDM_EDIT_URLCOMPONENTENCODE,
 		IDM_EDIT_URLDECODE,
 		IDM_EDIT_URLENCODE,
 		IDM_EDIT_XHTML_ESCAPE_CHAR,
@@ -2522,7 +2491,6 @@ void MsgInitMenu(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 	DisableCmd(hmenu, IDM_EDIT_STREAMCOMMENT, (pLexCurrent->lexerAttr & LexerAttr_NoBlockComment));
 
 	CheckCmd(hmenu, IDM_VIEW_SHOW_FOLDING, bShowCodeFolding);
-	CheckCmd(hmenu, IDM_VIEW_USE2NDGLOBALSTYLE, bUse2ndGlobalStyle);
 	CheckCmd(hmenu, IDM_VIEW_USEDEFAULT_CODESTYLE, pLexCurrent->bUseDefaultCodeStyle);
 	i = IDM_VIEW_STYLE_THEME_DEFAULT + np2StyleTheme;
 	CheckMenuRadioItem(hmenu, IDM_VIEW_STYLE_THEME_DEFAULT, IDM_VIEW_STYLE_THEME_DARK, i, MF_BYCOMMAND);
@@ -2540,6 +2508,7 @@ void MsgInitMenu(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 	CheckCmd(hmenu, IDM_VIEW_SHOWINDENTGUIDES, bShowIndentGuides);
 	CheckCmd(hmenu, IDM_VIEW_LINENUMBERS, bShowLineNumbers);
 	CheckCmd(hmenu, IDM_VIEW_MARGIN, bShowBookmarkMargin);
+	CheckCmd(hmenu, IDM_VIEW_CHANGE_HISTORY_MARKER, iChangeHistoryMarker);
 	CheckCmd(hmenu, IDM_VIEW_AUTOCOMPLETION_IGNORECASE, autoCompletionConfig.bIgnoreCase);
 	CheckCmd(hmenu, IDM_SET_LATEX_INPUT_METHOD, autoCompletionConfig.bLaTeXInputMethod);
 	CheckCmd(hmenu, IDM_SET_MULTIPLE_SELECTION, iSelectOption & SelectOption_EnableMultipleSelection);
@@ -2566,7 +2535,10 @@ void MsgInitMenu(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 	CheckCmd(hmenu, IDM_VIEW_MENU, bShowMenu);
 	CheckCmd(hmenu, IDM_VIEW_TOOLBAR, bShowToolbar);
 	EnableCmd(hmenu, IDM_VIEW_CUSTOMIZE_TOOLBAR, bShowToolbar);
-	CheckCmd(hmenu, IDM_VIEW_AUTO_SCALE_TOOLBAR, bAutoScaleToolbar);
+	CheckCmd(hmenu, IDM_VIEW_AUTO_SCALE_TOOLBAR, iAutoScaleToolbar);
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+	CheckCmd(hmenu, IDM_VIEW_USE_LARGE_TOOLBAR, iAutoScaleToolbar > USER_DEFAULT_SCREEN_DPI);
+#endif
 	CheckCmd(hmenu, IDM_VIEW_STATUSBAR, bShowStatusbar);
 #if NP2_ENABLE_APP_LOCALIZATION_DLL
 	CheckMenuRadioItem(hmenu, IDM_LANG_USER_DEFAULT, IDM_LANG_LAST_LANGUAGE, languageMenu, MF_BYCOMMAND);
@@ -2994,7 +2966,7 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 			iNewEncoding = (mask >> (4*(LOWORD(wParam) - IDM_ENCODING_ANSI))) & 15;
 		}
 
-		if (EditSetNewEncoding(iCurrentEncoding, iNewEncoding, flagSetEncoding, StrIsEmpty(szCurFile))) {
+		if (EditSetNewEncoding(iCurrentEncoding, iNewEncoding, flagSetEncoding)) {
 			if (SciCall_GetLength() == 0) {
 				iCurrentEncoding = iNewEncoding;
 				if (StrIsEmpty(szCurFile) || Encoding_HasBOM(iNewEncoding) == Encoding_HasBOM(iOriginalEncoding)) {
@@ -3593,15 +3565,12 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 		break;
 
 	case IDM_EDIT_URLENCODE:
-		BeginWaitCursor();
-		EditURLEncode();
-		EndWaitCursor();
+	case IDM_EDIT_URLCOMPONENTENCODE:
+		EditURLEncode(LOWORD(wParam) == IDM_EDIT_URLCOMPONENTENCODE);
 		break;
 
 	case IDM_EDIT_URLDECODE:
-		BeginWaitCursor();
 		EditURLDecode();
-		EndWaitCursor();
 		break;
 
 	case IDM_EDIT_ESCAPECCHARS:
@@ -3726,34 +3695,23 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 	break;
 
 	// Main Bookmark Functions
-	case BME_EDIT_BOOKMARKNEXT: {
-		const Sci_Position iPos = SciCall_GetCurrentPos();
-		const Sci_Line iLine = SciCall_LineFromPosition(iPos);
-
-		Sci_Line iNextLine = SciCall_MarkerNext(iLine + 1, MarkerBitmask_Bookmark);
-		if (iNextLine < 0) {
-			iNextLine = SciCall_MarkerNext(0, MarkerBitmask_Bookmark);
-		}
-
-		if (iNextLine >= 0) {
-			editMarkAll.ignoreSelectionUpdate = true;
-			SciCall_EnsureVisible(iNextLine);
-			SciCall_GotoLine(iNextLine);
-			SciCall_SetYCaretPolicy(CARET_SLOP | CARET_STRICT | CARET_EVEN, 10);
-			SciCall_ScrollCaret();
-			SciCall_SetYCaretPolicy(CARET_EVEN, 0);
-		}
-	}
-	break;
-
+	case BME_EDIT_BOOKMARKNEXT:
 	case BME_EDIT_BOOKMARKPREV: {
 		const Sci_Position iPos = SciCall_GetCurrentPos();
 		const Sci_Line iLine = SciCall_LineFromPosition(iPos);
 
-		Sci_Line iNextLine = SciCall_MarkerPrevious(iLine - 1, MarkerBitmask_Bookmark);
-		if (iNextLine < 0) {
-			const Sci_Line nLines = SciCall_GetLineCount();
-			iNextLine = SciCall_MarkerPrevious(nLines, MarkerBitmask_Bookmark);
+		Sci_Line iNextLine;
+		if (LOWORD(wParam) == BME_EDIT_BOOKMARKNEXT) {
+			iNextLine = SciCall_MarkerNext(iLine + 1, MarkerBitmask_Bookmark);
+			if (iNextLine < 0) {
+				iNextLine = SciCall_MarkerNext(0, MarkerBitmask_Bookmark);
+			}
+		} else {
+			iNextLine = SciCall_MarkerPrevious(iLine - 1, MarkerBitmask_Bookmark);
+			if (iNextLine < 0) {
+				const Sci_Line iLines = SciCall_GetLineCount();
+				iNextLine = SciCall_MarkerPrevious(iLines, MarkerBitmask_Bookmark);
+			}
 		}
 
 		if (iNextLine >= 0) {
@@ -3808,38 +3766,38 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 			break;
 		}
 
-		if (StrIsEmpty(efrData.szFind)) {
-			if (LOWORD(wParam) != IDM_EDIT_REPLACENEXT) {
+		if (StrIsEmpty(efrData.szFind) && LOWORD(wParam) != IDM_EDIT_REPLACENEXT) {
+			EditSaveSelectionAsFindText(&efrData, IDM_EDIT_SAVEFIND, false);
+			if (StrIsEmpty(efrData.szFind)) {
 				SendWMCommand(hwnd, IDM_EDIT_FIND);
+				break;
+			}
+		}
+
+		switch (LOWORD(wParam)) {
+		case IDM_EDIT_FINDNEXT:
+			EditFindNext(&efrData, false);
+			break;
+
+		case IDM_EDIT_FINDPREV:
+			EditFindPrev(&efrData, false);
+			break;
+
+		case IDM_EDIT_REPLACENEXT:
+			if (bReplaceInitialized && StrNotEmpty(efrData.szFind)) {
+				EditReplace(hwndEdit, &efrData);
 			} else {
 				SendWMCommand(hwnd, IDM_EDIT_REPLACE);
 			}
-		} else {
-			switch (LOWORD(wParam)) {
-			case IDM_EDIT_FINDNEXT:
-				EditFindNext(&efrData, false);
-				break;
+			break;
 
-			case IDM_EDIT_FINDPREV:
-				EditFindPrev(&efrData, false);
-				break;
+		case IDM_EDIT_SELTONEXT:
+			EditFindNext(&efrData, true);
+			break;
 
-			case IDM_EDIT_REPLACENEXT:
-				if (bReplaceInitialized) {
-					EditReplace(hwndEdit, &efrData);
-				} else {
-					SendWMCommand(hwnd, IDM_EDIT_REPLACE);
-				}
-				break;
-
-			case IDM_EDIT_SELTONEXT:
-				EditFindNext(&efrData, true);
-				break;
-
-			case IDM_EDIT_SELTOPREV:
-				EditFindPrev(&efrData, true);
-				break;
-			}
+		case IDM_EDIT_SELTOPREV:
+			EditFindPrev(&efrData, true);
+			break;
 		}
 		break;
 
@@ -3880,10 +3838,6 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 	case IDT_VIEW_SCHEMECONFIG:
 	case IDM_VIEW_SCHEME_CONFIG:
 		Style_ConfigDlg(hwndEdit);
-		break;
-
-	case IDM_VIEW_USE2NDGLOBALSTYLE:
-		Style_ToggleUse2ndGlobalStyle();
 		break;
 
 	case IDM_VIEW_USEDEFAULT_CODESTYLE:
@@ -3962,6 +3916,14 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 		bShowBookmarkMargin = !bShowBookmarkMargin;
 		UpdateBookmarkMarginWidth();
 		Style_SetBookmark();
+		break;
+
+	case IDM_VIEW_CHANGE_HISTORY_MARKER:
+		if (iChangeHistoryMarker != SC_CHANGE_HISTORY_DISABLED || !SciCall_CanUndo()) {
+			iChangeHistoryMarker = (iChangeHistoryMarker == SC_CHANGE_HISTORY_DISABLED)? (SC_CHANGE_HISTORY_ENABLED | SC_CHANGE_HISTORY_MARKERS) : SC_CHANGE_HISTORY_DISABLED;
+			UpdateBookmarkMarginWidth();
+			SciCall_SetChangeHistory(iChangeHistoryMarker);
+		}
 		break;
 
 	case IDM_VIEW_AUTOCOMPLETION_SETTINGS:
@@ -4172,9 +4134,20 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 		break;
 
 	case IDM_VIEW_AUTO_SCALE_TOOLBAR:
-		bAutoScaleToolbar = !bAutoScaleToolbar;
+		iAutoScaleToolbar = iAutoScaleToolbar ? 0 : USER_DEFAULT_SCREEN_DPI;
 		MsgThemeChanged(hwnd, 0, 0);
 		break;
+
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+	case IDM_VIEW_USE_LARGE_TOOLBAR:
+		if (iAutoScaleToolbar >= USER_DEFAULT_SCREEN_DPI && iAutoScaleToolbar < USER_DEFAULT_SCREEN_DPI*2) {
+			iAutoScaleToolbar += USER_DEFAULT_SCREEN_DPI/2;
+		} else {
+			iAutoScaleToolbar = USER_DEFAULT_SCREEN_DPI;
+		}
+		MsgThemeChanged(hwnd, 0, 0);
+		break;
+#endif
 
 	case IDM_VIEW_STATUSBAR:
 		bShowStatusbar = !bShowStatusbar;
@@ -4561,55 +4534,10 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 	case IDM_LANG_KOREAN:
 	case IDM_LANG_PORTUGUESE_BRAZIL:
 	case IDM_LANG_FRENCH_FRANCE:
+	case IDM_LANG_RUSSIAN:
 		SetUILanguage(LOWORD(wParam));
 		break;
 #endif
-
-	// Text File
-	case IDM_LEXER_TEXTFILE:
-	case IDM_LEXER_2NDTEXTFILE:
-	case IDM_LEXER_CSV:
-	// CSS Style Sheet
-	case IDM_LEXER_CSS:
-	case IDM_LEXER_SCSS:
-	case IDM_LEXER_LESS:
-	case IDM_LEXER_HSS:
-	// JavaScript
-	case IDM_LEXER_JAVASCRIPT:
-	case IDM_LEXER_JAVASCRIPT_JSX:
-	case IDM_LEXER_TYPESCRIPT:
-	case IDM_LEXER_TYPESCRIPT_TSX:
-	// Web Source Code
-	case IDM_LEXER_WEB:
-	case IDM_LEXER_PHP:
-	case IDM_LEXER_JSP:
-	case IDM_LEXER_ASPX_CS:
-	case IDM_LEXER_ASPX_VB:
-	case IDM_LEXER_ASP_VBS:
-	case IDM_LEXER_ASP_JS:
-	case IDM_LEXER_APACHE:
-	// Markdown
-	case IDM_LEXER_MARKDOWN_GITHUB:
-	case IDM_LEXER_MARKDOWN_GITLAB:
-	case IDM_LEXER_MARKDOWN_PANDOC:
-	// Math
-	case IDM_LEXER_MATHEMATICA:
-	case IDM_LEXER_MATLAB:
-	case IDM_LEXER_OCTAVE:
-	case IDM_LEXER_SCILAB:
-	// Shell Script
-	case IDM_LEXER_BASH:
-	case IDM_LEXER_CSHELL:
-	case IDM_LEXER_M4:
-	// XML Document
-	case IDM_LEXER_XML:
-	case IDM_LEXER_XSD:
-	case IDM_LEXER_XSLT:
-	case IDM_LEXER_DTD:
-	case IDM_LEXER_PROPERTY_LIST:
-	//case IDM_LEXER_SVG:
-		Style_SetLexerByLangIndex(LOWORD(wParam));
-		break;
 
 	case CMD_TIMESTAMPS:
 		EditUpdateTimestampMatchTemplate(hwndEdit);
@@ -4632,48 +4560,9 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 
 	case CMD_FINDNEXTSEL:
 	case CMD_FINDPREVSEL:
-	case IDM_EDIT_SAVEFIND: {
-		Sci_Position cchSelection = SciCall_GetSelTextLength();
-		if (cchSelection == 0) {
-			SendWMCommand(hwnd, IDM_EDIT_SELECTWORD);
-			cchSelection = SciCall_GetSelTextLength();
-		}
-
-		if (cchSelection > 0 && cchSelection < NP2_FIND_REPLACE_LIMIT) {
-			char mszSelection[NP2_FIND_REPLACE_LIMIT];
-
-			SciCall_GetSelText(mszSelection);
-			mszSelection[cchSelection] = 0; // zero terminate
-
-			const UINT cpEdit = SciCall_GetCodePage();
-			strcpy(efrData.szFind, mszSelection);
-
-			if (cpEdit != SC_CP_UTF8) {
-				WCHAR wszBuf[NP2_FIND_REPLACE_LIMIT];
-				MultiByteToWideChar(cpEdit, 0, mszSelection, -1, wszBuf, COUNTOF(wszBuf));
-				WideCharToMultiByte(CP_UTF8, 0, wszBuf, -1, efrData.szFindUTF8, COUNTOF(efrData.szFindUTF8), nullptr, nullptr);
-			} else {
-				strcpy(efrData.szFindUTF8, mszSelection);
-			}
-
-			efrData.fuFlags &= SCFIND_REGEXP - 1; // clear all regex flags
-			efrData.option &= ~FindReplaceOption_TransformBackslash;
-
-			switch (LOWORD(wParam)) {
-			case IDM_EDIT_SAVEFIND:
-				break;
-
-			case CMD_FINDNEXTSEL:
-				EditFindNext(&efrData, false);
-				break;
-
-			case CMD_FINDPREVSEL:
-				EditFindPrev(&efrData, false);
-				break;
-			}
-		}
-	}
-	break;
+	case IDM_EDIT_SAVEFIND:
+		EditSaveSelectionAsFindText(&efrData, LOWORD(wParam), true);
+		break;
 
 	case CMD_INCLINELIMIT:
 	case CMD_DECLINELIMIT:
@@ -4754,6 +4643,11 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 		break;
 
 	default: {
+		if (LOWORD(wParam) >= IDM_LEXER_TEXTFILE && LOWORD(wParam) < IDM_LEXER_LEXER_COUNT) {
+			Style_SetLexerByLangIndex(LOWORD(wParam));
+			break;
+		}
+
 		const UINT index = LOWORD(wParam) - IDM_RECENT_HISTORY_START;
 		if (index < MRU_MAXITEMS) {
 			LPCWSTR path = mruFile.pszItems[index];
@@ -4949,7 +4843,7 @@ LRESULT MsgNotify(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 					const int chNext = (brace == '(') ? ')' : brace + 2;
 					if (ch == chNext) {
 						if (SciCall_BraceMatchNext(iPos, SciCall_PositionBefore(iCurPos)) < 0) {
-							*(braces + 1) = L'\0'; // delete close brace
+							braces[1] = L'\0'; // delete close brace
 						}
 					} else {
 						closeBrace = brace != '<' && braces[1] == chNext;
@@ -5022,7 +4916,9 @@ LRESULT MsgNotify(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 				break;
 #endif
 			case MarginNumber_Bookmark:
-				EditToggleBookmarkAt(scn->position);
+				if (bShowBookmarkMargin) {
+					EditToggleBookmarkAt(scn->position);
+				}
 				break;
 			}
 			break;
@@ -5106,7 +5002,8 @@ LRESULT MsgNotify(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 				MENUITEMINFO mii;
 				mii.cbSize = sizeof(MENUITEMINFO);
 				mii.fMask = MIIM_ID | MIIM_STRING | MIIM_BITMAP;
-				for (int i = 0; i < mruFile.iSize; i++) {
+				const int count = min(mruFile.iSize, MRU_MAXITEMS);
+				for (int i = 0; i < count; i++) {
 					LPCWSTR path = mruFile.pszItems[i];
 					HBITMAP hbmp = bitmapCache.Get(path);
 					mii.wID = i + IDM_RECENT_HISTORY_START;
@@ -5273,7 +5170,9 @@ void LoadSettings() noexcept {
 	pt.x = section.GetInt(L"WindowPosX", 0);
 	pt.y = section.GetInt(L"WindowPosY", 0);
 
-	bSaveRecentFiles = section.GetBool(L"SaveRecentFiles", false);
+	iValue = section.GetInt(L"SaveRecentFiles", MRU_MAXITEMS << 1);
+	bSaveRecentFiles = iValue & true;
+	iMaxRecentFiles = max(iValue >> 1, MRU_MAXITEMS);
 	bSaveFindReplace = section.GetBool(L"SaveFindReplace", false);
 	iValue = section.GetInt(L"FindReplaceOption", FindReplaceOption_Default);
 	iFindReplaceOption = iValue & 15;
@@ -5360,6 +5259,7 @@ void LoadSettings() noexcept {
 	bShowBookmarkMargin = section.GetBool(L"ShowBookmarkMargin", false);
 	bShowLineNumbers = section.GetBool(L"ShowLineNumbers", true);
 	bShowCodeFolding = section.GetBool(L"ShowCodeFolding", true);
+	iChangeHistoryMarker = section.GetInt(L"ChangeHistoryMarker", SC_CHANGE_HISTORY_DISABLED);
 	bMarkOccurrences = section.GetInt(L"MarkOccurrences", MarkOccurrences_Enable);
 
 	bViewWhiteSpace = section.GetBool(L"ViewWhiteSpace", false);
@@ -5455,31 +5355,12 @@ void LoadSettings() noexcept {
 
 	bShowMenu = section.GetBool(L"ShowMenu", true);
 	bShowToolbar = section.GetBool(L"ShowToolbar", true);
-	bAutoScaleToolbar = section.GetBool(L"AutoScaleToolbar", true);
+	iAutoScaleToolbar = section.GetInt(L"AutoScaleToolbar", USER_DEFAULT_SCREEN_DPI);
 	bShowStatusbar = section.GetBool(L"ShowStatusbar", true);
 
 	iValue = section.GetInt(L"FullScreenMode", FullScreenMode_Default);
 	iFullScreenMode = iValue;
 	bInFullScreenMode = iValue & FullScreenMode_OnStartup;
-
-	// toolbar image section
-	{
-		LoadIniSection(INI_SECTION_NAME_TOOLBAR_IMAGES, pIniSectionBuf, cchIniSection);
-		section.Parse(pIniSectionBuf);
-
-		strValue = section.GetValue(L"BitmapDefault");
-		if (StrNotEmpty(strValue)) {
-			tchToolbarBitmap = StrDup(strValue);
-		}
-		strValue = section.GetValue(L"BitmapHot");
-		if (StrNotEmpty(strValue)) {
-			tchToolbarBitmapHot = StrDup(strValue);
-		}
-		strValue = section.GetValue(L"BitmapDisabled");
-		if (StrNotEmpty(strValue)) {
-			tchToolbarBitmapDisabled = StrDup(strValue);
-		}
-	}
 
 	// window position section
 	{
@@ -5617,9 +5498,10 @@ void SaveSettings(bool bSaveSettingsNow) noexcept {
 		section.SetInt(L"WindowPosY", wi.y);
 	}
 
-	section.SetBoolEx(L"SaveRecentFiles", bSaveRecentFiles, false);
+	int iValue = (iMaxRecentFiles << 1) | static_cast<int>(bSaveRecentFiles);
+	section.SetIntEx(L"SaveRecentFiles", iValue, MRU_MAXITEMS << 1);
 	section.SetBoolEx(L"SaveFindReplace", bSaveFindReplace, false);
-	int iValue = iFindReplaceOption | ((efrData.option & FindReplaceOption_BehaviorMask) << 4);
+	iValue = iFindReplaceOption | ((efrData.option & FindReplaceOption_BehaviorMask) << 4);
 	section.SetIntEx(L"FindReplaceOption", iValue, FindReplaceOption_Default);
 	if (bSaveFindReplace) {
 		iValue = efrData.fuFlags | ((efrData.option & FindReplaceOption_SearchMask) << 10);
@@ -5668,6 +5550,7 @@ void SaveSettings(bool bSaveSettingsNow) noexcept {
 	section.SetBoolEx(L"ShowBookmarkMargin", bShowBookmarkMargin, false);
 	section.SetBoolEx(L"ShowLineNumbers", bShowLineNumbers, true);
 	section.SetBoolEx(L"ShowCodeFolding", bShowCodeFolding, true);
+	section.SetIntEx(L"ChangeHistoryMarker", iChangeHistoryMarker, SC_CHANGE_HISTORY_DISABLED);
 	section.SetIntEx(L"MarkOccurrences", bMarkOccurrences, MarkOccurrences_Enable);
 	section.SetBoolEx(L"ViewWhiteSpace", bViewWhiteSpace, false);
 	section.SetBoolEx(L"ViewEOLs", bViewEOLs, false);
@@ -5725,7 +5608,7 @@ void SaveSettings(bool bSaveSettingsNow) noexcept {
 	section.SetStringEx(L"ToolbarButtons", tchToolbarButtons, DefaultToolbarButtons);
 	section.SetBoolEx(L"ShowMenu", bShowMenu, true);
 	section.SetBoolEx(L"ShowToolbar", bShowToolbar, true);
-	section.SetBoolEx(L"AutoScaleToolbar", bAutoScaleToolbar, true);
+	section.SetIntEx(L"AutoScaleToolbar", iAutoScaleToolbar, USER_DEFAULT_SCREEN_DPI);
 	section.SetBoolEx(L"ShowStatusbar", bShowStatusbar, true);
 	section.SetIntEx(L"FullScreenMode", iFullScreenMode, FullScreenMode_Default);
 
@@ -6520,8 +6403,13 @@ void LoadFlags() noexcept {
 	fNoAutoDetection = section.GetBool(L"NoAutoDetection", false);
 	fNoFileVariables = section.GetBool(L"NoFileVariables", false);
 
+	LPCWSTR strValue = section.GetValue(L"ToolbarImage");
+	if (StrNotEmpty(strValue)) {
+		tchToolbarBitmap = StrDup(strValue);
+	}
+
 	if (StrIsEmpty(g_wchAppUserModelID)) {
-		LPCWSTR strValue = section.GetValue(L"ShellAppUserModelID");
+		strValue = section.GetValue(L"ShellAppUserModelID");
 		if (StrNotEmpty(strValue)) {
 			lstrcpyn(g_wchAppUserModelID, strValue, COUNTOF(g_wchAppUserModelID));
 		} else {

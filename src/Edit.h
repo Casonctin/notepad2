@@ -122,7 +122,7 @@ static inline void EditSetEmptyText() noexcept{
 	EditSetNewText("", 0, 1);
 }
 
-bool	EditConvertText(UINT cpSource, UINT cpDest, bool bSetSavePoint) noexcept;
+bool	EditConvertText(UINT cpSource, UINT cpDest) noexcept;
 void	EditConvertToLargeMode() noexcept;
 void	EditReplaceDocument(HANDLE pdoc) noexcept;
 
@@ -146,7 +146,7 @@ bool	EditSaveFile(HWND hwnd, LPCWSTR pszFile, int saveFlag, EditFileIOStatus &st
 void	EditReplaceMainSelection(Sci_Position cchText, LPCSTR pszText) noexcept;
 void	EditMapTextCase(int menu) noexcept;
 
-void	EditURLEncode() noexcept;
+void	EditURLEncode(bool component) noexcept;
 void	EditURLDecode() noexcept;
 void	EditEscapeCChars(HWND hwnd) noexcept;
 void	EditUnescapeCChars(HWND hwnd) noexcept;
@@ -195,6 +195,7 @@ void	EditGetExcerpt(LPWSTR lpszExcerpt, DWORD cchExcerpt) noexcept;
 
 void	EditSelectWord() noexcept;
 void	EditSelectLines(bool currentBlock, bool lineSelection) noexcept;
+void	EditSaveSelectionAsFindText(EDITFINDREPLACE *lpefr, int menu, bool findSelection) noexcept;
 HWND	EditFindReplaceDlg(HWND hwnd, EDITFINDREPLACE *lpefr, bool bReplace) noexcept;
 void	EditFindNext(const EDITFINDREPLACE *lpefr, bool fExtendSelection) noexcept;
 void	EditFindPrev(const EDITFINDREPLACE *lpefr, bool fExtendSelection) noexcept;
@@ -544,7 +545,7 @@ constexpr bool Encoding_IsUTF8(int iEncoding) noexcept {
 }
 
 void	Encoding_ReleaseResources() noexcept;
-bool	EditSetNewEncoding(int iEncoding, int iNewEncoding, BOOL bNoUI, bool bSetSavePoint) noexcept;
+bool	EditSetNewEncoding(int iEncoding, int iNewEncoding, BOOL bNoUI) noexcept;
 void	EditOnCodePageChanged(UINT oldCodePage, bool showControlCharacter, EDITFINDREPLACE *lpefr) noexcept;
 const char* GetFoldDisplayEllipsis(UINT cpEdit, UINT acp) noexcept;
 void	Encoding_InitDefaults() noexcept;

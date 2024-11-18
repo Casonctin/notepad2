@@ -435,11 +435,11 @@ HBITMAP EnlargeImageForDPI(HBITMAP hbmp, UINT dpi) noexcept {
 	return hbmp;
 }
 
-HBITMAP ResizeImageForCurrentDPI(HBITMAP hbmp) noexcept {
+HBITMAP ResizeImageForDPI(HBITMAP hbmp, UINT dpi) noexcept {
 	BITMAP bmp;
 	if (GetObject(hbmp, sizeof(BITMAP), &bmp)) {
 		// assume 16x16 at 100% scaling
-		const int height = (g_uCurrentDPI*16) / USER_DEFAULT_SCREEN_DPI;
+		const int height = (dpi*16) / USER_DEFAULT_SCREEN_DPI;
 		if (height == bmp.bmHeight && bmp.bmBitsPixel == 32) {
 			return hbmp;
 		}
@@ -450,7 +450,7 @@ HBITMAP ResizeImageForCurrentDPI(HBITMAP hbmp) noexcept {
 #if 0
 			BITMAP bmp2;
 			if (GetObject(hCopy, sizeof(BITMAP), &bmp2)) {
-				printf("%s %u: (%d x %d, %d) => (%d x %d, %d)\n", __func__, g_uCurrentDPI,
+				printf("%s %u: (%d x %d, %d) => (%d x %d, %d)\n", __func__, dpi,
 				bmp.bmWidth, bmp.bmHeight, bmp.bmBitsPixel, bmp2.bmWidth, bmp2.bmHeight, bmp2.bmBitsPixel);
 			}
 #endif
@@ -1240,7 +1240,10 @@ static LRESULT CALLBACK MultilineEditProc(HWND hwnd, UINT umsg, WPARAM wParam, L
 }
 
 void MultilineEditSetup(HWND hwndDlg, int nCtlId) noexcept {
-	SetWindowSubclass(GetDlgItem(hwndDlg, nCtlId), MultilineEditProc, 0, 0);
+	HWND hwnd = GetDlgItem(hwndDlg, nCtlId);
+	SetWindowSubclass(hwnd, MultilineEditProc, 0, 0);
+	// Ctrl+Backspace
+	SHAutoComplete(hwnd, SHACF_FILESYS_ONLY | SHACF_AUTOAPPEND_FORCE_OFF | SHACF_AUTOSUGGEST_FORCE_OFF);
 }
 
 //=============================================================================
@@ -1479,6 +1482,9 @@ HMODULE LoadLocalizedResourceDLL(LANGID lang, LPCWSTR dllName) noexcept {
 		break;
 	case LANG_PORTUGUESE:
 		folder = L"pt-BR";
+		break;
+	case LANG_RUSSIAN:
+		folder = L"ru";
 		break;
 	}
 
@@ -2296,11 +2302,12 @@ void ComboBox_AddStringA2W(UINT uCP, HWND hwnd, LPCSTR lpString) noexcept {
 //
 // MRU functions
 //
-void MRUList::Init(LPCWSTR pszRegKey, int flags) noexcept {
+void MRUList::Init(LPCWSTR pszRegKey, int capacity_, int flags) noexcept {
 	iSize = 0;
+	capacity = capacity_;
 	iFlags = flags;
 	szRegKey = pszRegKey;
-	memset(AsVoidPointer(pszItems), 0, sizeof(pszItems));
+	pszItems = static_cast<LPWSTR *>(NP2HeapAlloc(sizeof(LPWSTR) * capacity_));
 	Load();
 }
 
@@ -2316,7 +2323,7 @@ void MRUList::Add(LPCWSTR pszNew) noexcept {
 	const int flags = iFlags;
 	LPWSTR tchItem = nullptr;
 	int i;
-	for (i = 0; i < MRU_MAXITEMS; i++) {
+	for (i = 0; i < capacity; i++) {
 		WCHAR * const item = pszItems[i];
 		if (item == nullptr) {
 			break;
@@ -2326,7 +2333,7 @@ void MRUList::Add(LPCWSTR pszNew) noexcept {
 			break;
 		}
 	}
-	if (i == MRU_MAXITEMS) {
+	if (i == capacity) {
 		--i;
 		LocalFree(pszItems[i]);
 	} else if (i == iSize) {
@@ -2364,7 +2371,7 @@ void MRUList::Delete(int iIndex) noexcept {
 
 void MRUList::DeleteFileFromStore(LPCWSTR pszFile) const noexcept {
 	MRUList mruStore;
-	mruStore.Init(szRegKey, iFlags);
+	mruStore.Init(szRegKey, capacity, iFlags);
 	int deleted = 0;
 
 	for (int index = 0; index < mruStore.iSize; ) {
@@ -2384,10 +2391,10 @@ void MRUList::DeleteFileFromStore(LPCWSTR pszFile) const noexcept {
 
 	mruStore.iSize -= deleted;
 	mruStore.Save();
-	mruStore.Empty(false);
+	mruStore.Empty(false, true);
 }
 
-void MRUList::Empty(bool save) noexcept {
+void MRUList::Empty(bool save, bool destroy) noexcept {
 	for (int i = 0; i < iSize; i++) {
 		LocalFree(pszItems[i]);
 		pszItems[i] = nullptr;
@@ -2395,6 +2402,10 @@ void MRUList::Empty(bool save) noexcept {
 	iSize = 0;
 	if (save && StrNotEmpty(szIniFile)) {
 		IniClearSection(szRegKey);
+	}
+	if (destroy) {
+		NP2HeapFree(AsVoidPointer(pszItems));
+		pszItems = nullptr;
 	}
 }
 
@@ -2404,10 +2415,10 @@ void MRUList::Load() noexcept {
 	}
 
 	IniSectionParser section;
-	WCHAR *pIniSectionBuf = static_cast<WCHAR *>(NP2HeapAlloc(sizeof(WCHAR) * MAX_INI_SECTION_SIZE_MRU));
+	WCHAR *pIniSectionBuf = static_cast<WCHAR *>(NP2HeapAlloc(sizeof(WCHAR) * MAX_MRU_ITEM_SIZE * capacity));
 	const DWORD cchIniSection = static_cast<DWORD>(NP2HeapSize(pIniSectionBuf) / sizeof(WCHAR));
 
-	section.Init(MRU_MAXITEMS);
+	section.Init(capacity);
 	LoadIniSection(szRegKey, pIniSectionBuf, cchIniSection);
 	section.ParseArray(pIniSectionBuf, iFlags & MRUFlags_QuoteValue);
 	UINT n = 0;
@@ -2439,7 +2450,7 @@ void MRUList::Save() const noexcept {
 	}
 
 	WCHAR tchName[16];
-	WCHAR *pIniSectionBuf = static_cast<WCHAR *>(NP2HeapAlloc(sizeof(WCHAR) * MAX_INI_SECTION_SIZE_MRU));
+	WCHAR *pIniSectionBuf = static_cast<WCHAR *>(NP2HeapAlloc(sizeof(WCHAR) * MAX_MRU_ITEM_SIZE * capacity));
 	IniSectionBuilder section = { pIniSectionBuf };
 
 	for (int i = 0; i < iSize; i++) {
@@ -2464,23 +2475,19 @@ void MRUList::Save() const noexcept {
 }
 
 void MRUList::MergeSave(bool keep) noexcept {
-	if (!keep || StrIsEmpty(szIniFile)) {
-		Empty(true);
-		return;
+	if (keep && iSize > 0 && StrNotEmpty(szIniFile)) {
+		LPWSTR * const current = pszItems;
+		const int count = iSize;
+		Init(szRegKey, capacity, iFlags);
+		for (int i = count - 1; i >= 0; i--) {
+			LPWSTR path = current[i];
+			Add(path);
+			LocalFree(path);
+		}
+		NP2HeapFree(AsVoidPointer(current));
+		Save();
 	}
-	if (iSize <= 0) {
-		return;
-	}
-
-	MRUList mruBase;
-	mruBase.Init(szRegKey, iFlags);
-	for (int i = iSize - 1; i >= 0; i--) {
-		mruBase.Add(pszItems[i]);
-	}
-
-	mruBase.Save();
-	mruBase.Empty(false);
-	Empty(false);
+	Empty(!keep, true);
 }
 
 void MRUList::AddToCombobox(HWND hwnd) const noexcept {

@@ -21,6 +21,7 @@
 #define NP2STYLE_CallTip				63219
 #define NP2STYLE_CodeFolding			63220
 #define NP2STYLE_Link					63221
+#define NP2STYLE_ChangeHistoryMarker	63222
 
 #define NP2STYLE_Default				63226
 #define NP2STYLE_Comment				63227
@@ -193,6 +194,7 @@
 #define NP2STYLE_Parameter				63603
 #define NP2STYLE_InlineExpansion		63604
 #define NP2STYLE_Pragma					63605
+#define NP2STYLE_HardLineBreak			63606
 
 #define NP2STYLE_Section				63611
 #define NP2STYLE_Assignment				63612

@@ -457,6 +457,7 @@ BEGIN
 		MENUITEM SEPARATOR
 		MENUITEM "&Numeri linee\tCtrl+Shift+N",		IDM_VIEW_LINENUMBERS
 		MENUITEM "Mar&gine segnalibri\tCtrl+Shift+M",	IDM_VIEW_MARGIN
+		MENUITEM "Marcatore &Cronologia",			IDM_VIEW_CHANGE_HISTORY_MARKER
 		MENUITEM SEPARATOR
 		MENUITEM "Mostra Code &Folding\tCtrl+Shift+Alt+F",IDM_VIEW_SHOW_FOLDING
 		POPUP "Chiudi F&olds"
@@ -493,8 +494,7 @@ BEGIN
 		MENUITEM "&Personalizza schemi...\tCtrl+F12",	IDM_VIEW_SCHEME_CONFIG
 		MENUITEM "Sc&hemi preferiti...",			IDM_VIEW_SCHEME_FAVORITE
 		MENUITEM SEPARATOR
-		MENUITEM "Usa il &2° stile globale\tShift+F12",IDM_VIEW_USE2NDGLOBALSTYLE
-		MENUITEM "&Usa lo stile predefinito per il codice",			IDM_VIEW_USEDEFAULT_CODESTYLE
+		MENUITEM "&Usa lo stile predefinito per il codice\tShift+F12",	IDM_VIEW_USEDEFAULT_CODESTYLE
 		POPUP "St&ile Tema"
 		BEGIN
 			MENUITEM "&Predefinito",					IDM_VIEW_STYLE_THEME_DEFAULT
@@ -552,6 +552,12 @@ BEGIN
 			MENUITEM "Macro &M4",					IDM_LEXER_M4
 		END
 		//POPUP "S&QL Dialect"
+		POPUP "&Visual Basic"
+		BEGIN
+			MENUITEM "Visual &Basic",				IDM_LEXER_VBNET
+			MENUITEM "&VBA / VB 6.0",				IDM_LEXER_VBA
+			MENUITEM "VB&Script",					IDM_LEXER_VBS
+		END
 		POPUP "Documento &XML"
 		BEGIN
 			MENUITEM "Documento &XML",				IDM_LEXER_XML
@@ -591,6 +597,9 @@ BEGIN
 			MENUITEM "Mostra &barra degli strumenti\tCtrl+F11",		IDM_VIEW_TOOLBAR
 			MENUITEM "&Personalizza barra degli strumenti...",		IDM_VIEW_CUSTOMIZE_TOOLBAR
 			MENUITEM "&Auto scala barra degli strumenti",			IDM_VIEW_AUTO_SCALE_TOOLBAR
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+			MENUITEM "Usa la barra degli strumenti &grande",			IDM_VIEW_USE_LARGE_TOOLBAR
+#endif
 			MENUITEM "M&ostra barra di stato\tShift+F11",	IDM_VIEW_STATUSBAR
 			MENUITEM SEPARATOR
 			MENUITEM "Modalità &trasparente\tCtrl+0",	IDM_VIEW_TRANSPARENT
@@ -617,6 +626,7 @@ BEGIN
 				MENUITEM "&Français",				IDM_LANG_FRENCH_FRANCE
 				MENUITEM "&Italiano",				IDM_LANG_ITALIAN
 				MENUITEM "&Português (Brasil)",		IDM_LANG_PORTUGUESE_BRAZIL
+				MENUITEM "Русский",					IDM_LANG_RUSSIAN
 				MENUITEM "日本語",					IDM_LANG_JAPANESE
 				MENUITEM "한국어",					IDM_LANG_KOREAN
 				MENUITEM "中文(繁體)",				IDM_LANG_CHINESE_TRADITIONAL
@@ -749,6 +759,7 @@ BEGIN
 			MENUITEM "&Malayalam a Latino",					IDM_EDIT_MAP_MALAYALAM_LATIN
 		END
 		MENUITEM "Codifica &URL\tCtrl+Shift+E",				IDM_EDIT_URLENCODE
+		MENUITEM "Codifica componente URL",					IDM_EDIT_URLCOMPONENTENCODE
 		MENUITEM "Decodifica UR&L\tCtrl+Shift+R",				IDM_EDIT_URLDECODE
 	END
 	POPUP "&Aiuto"
@@ -790,6 +801,9 @@ BEGIN
 		MENUITEM "Mostra barra degli s&trumenti",				IDM_VIEW_TOOLBAR
 		MENUITEM "&Personalizza barra degli strumenti...",		IDM_VIEW_CUSTOMIZE_TOOLBAR
 		MENUITEM "&Auto Scala barra degli strumenti",			IDM_VIEW_AUTO_SCALE_TOOLBAR
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+		MENUITEM "Usa la barra degli strumenti &grande",			IDM_VIEW_USE_LARGE_TOOLBAR
+#endif
 		MENUITEM "Mo&stra barra di stato",				IDM_VIEW_STATUSBAR
 	END
 	POPUP "+"
@@ -945,7 +959,7 @@ BEGIN
     VK_F12,         IDM_VIEW_SCHEME,            VIRTKEY, NOINVERT
     VK_F12,         IDM_VIEW_SCHEME_CONFIG,     VIRTKEY, CONTROL, NOINVERT
     VK_F12,         IDM_VIEW_DEFAULT_CODE_FONT, VIRTKEY, ALT, NOINVERT
-    VK_F12,         IDM_VIEW_USE2NDGLOBALSTYLE, VIRTKEY, SHIFT, NOINVERT
+    VK_F12,         IDM_VIEW_USEDEFAULT_CODESTYLE, VIRTKEY, SHIFT, NOINVERT
     VK_F2,          IDM_EDIT_SELTONEXT,         VIRTKEY, CONTROL, ALT, NOINVERT
     VK_F2,          IDM_EDIT_SELTOPREV,         VIRTKEY, SHIFT, CONTROL, ALT, NOINVERT
     VK_F2,          BME_EDIT_BOOKMARKNEXT,      VIRTKEY, NOINVERT
@@ -1253,6 +1267,8 @@ FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     CONTROL         "",IDC_FILEMRU,"SysListView32",LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_SHAREIMAGELISTS | LVS_AUTOARRANGE | LVS_NOCOLUMNHEADER | WS_BORDER | WS_TABSTOP,7,7,212,158
     AUTOCHECKBOX    "&Ricorda file recenti all'uscita.",IDC_SAVEMRU,7,169,155,10,WS_TABSTOP
+    LTEXT           "Maximum files:",IDC_MRU_COUNT_LABEL,7,185,64,8
+    EDITTEXT        IDC_MRU_COUNT_VALUE,73,183,30,13,ES_NUMBER | ES_AUTOHSCROLL
     CONTROL         "<a>Elimina Cronologia</a>",IDC_EMPTY_MRU,"SysLink",WS_TABSTOP,157,169,64,10
     DEFPUSHBUTTON   "OK",IDOK,113,183,50,14,WS_DISABLED
     PUSHBUTTON      "Annulla",IDCANCEL,169,183,50,14
@@ -1858,7 +1874,7 @@ file\tPer impostazione predefinita deve essere l'ultimo\n\targomento, senza spaz
 /e codifica    Codifica file sorgente.\n\
 /g linea[,colonna]\tSalta alla posizione specificata (/g -1 fine\n\tdel file).\n\
 /m testo\tTrova il testo specificato (/m- last, /mr regex, /mb\n\tbackslash).\n\
-/l[o|p]\tCarica automaticamente i file modificati.\n\
+/l[o]\tCarica automaticamente i file modificati.\n\
 /q\tForza la creazione di nuovi file senza richieste.\n\
 /ro\tAprire un file in modalità di sola lettura.\n\
 /p\tStampa il file con la stampante e le opzioni predefinite.\n\
@@ -2067,7 +2083,6 @@ BEGIN
 	NP2LEX_TEXTFILE					"File di Testo"
 
 	NP2LEX_2NDTEXTFILE				"2° File di testo"
-	NP2LEX_2NDGLOBAL				"2° Stili Globali"
 	NP2LEX_GLOBAL					"Stili Globali"
 END
 #endif // NP2_ENABLE_LOCALIZE_LEXER_NAME
@@ -2097,6 +2112,7 @@ BEGIN
 	NP2STYLE_CallTip				"Suggerimento"
 	NP2STYLE_CodeFolding			"Code Folding"
 	NP2STYLE_Link					"Collegamento"
+	NP2STYLE_ChangeHistoryMarker	"Marcatore Cronologia"
 
 	NP2STYLE_Default				"Predefinito"
 END

@@ -50,8 +50,8 @@ Latest development builds (artifacts in Release configuration for each compiler 
 		* Objective-C/C++, [Screenshots](https://github.com/zufuliu/notepad4/wiki/Screenshots#objective-cc)
 		* [C Standard Library](tools/lang/C.c), up to C2x.
 		* [C++ STL](tools/lang/CPP.cpp), up to C++20.
-	* [Cangjie (仓颉)](tools/lang/Cangjie.cj), up to June 2024.
-	* [CSS Style Sheet](tools/lang/CSS.css), up to September 2024.
+	* [Cangjie (仓颉)](tools/lang/Cangjie.cj), up to October 2024.
+	* [CSS Style Sheet](tools/lang/CSS.css), up to November 2024.
 		* [SCSS Style Sheet](tools/lang/SCSS.scss), up to Dart Sass 1.50.
 		* [Less Style Sheet](tools/lang/Less.less), up to Less 4.1.
 		* [HSS Style Sheet](tools/lang/HSS.hss)
@@ -113,7 +113,7 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* Pascal, Delphi
 	* [Perl](tools/lang/Perl.pl), up to Perl 5.36. [Screenshots](https://github.com/zufuliu/notepad4/wiki/Screenshots#perl)
 	* [PowerShell](tools/lang/PowerShell.ps1), up to PowerShell 7.2.
-	* [Python](tools/lang/Python.py), up to Python 3.12. [Screenshots](https://github.com/zufuliu/notepad4/wiki/Screenshots#python)
+	* [Python](tools/lang/Python.py), up to Python 3.13. [Screenshots](https://github.com/zufuliu/notepad4/wiki/Screenshots#python)
 	* [PHP Script](tools/lang/PHP.php), up to PHP 8.3. [Screenshots](https://github.com/zufuliu/notepad4/wiki/Screenshots#php)
 	* Windows Rescouce Script
 	* [R](tools/lang/R.r), up to R 4.2.
@@ -138,7 +138,7 @@ Latest development builds (artifacts in Release configuration for each compiler 
 	* [Texinfo](tools/lang/Texinfo.texi), up to Texinfo 7.1.
 	* [TOML File](https://toml.io/)
 	* [TypeScript](tools/lang/TypeScript.ts), up to TypeScript 5.4.
-	* Visual Basic, VB6, VB.NET
+	* Visual Basic, VB6, VBA, VB.NET
 	* VBScript
 	* [VHDL](tools/lang/VHDL.vhdl), up to VHDL 2019.
 	* Verilog HDL, up to [Verilog](tools/lang/Verilog.v) 2005 and [SystemVerilog](tools/lang/SystemVerilog.sv) 2017.
@@ -197,8 +197,10 @@ Latest development builds (artifacts in Release configuration for each compiler 
 * [Scintilla's website](https://www.scintilla.org/)
 * [Build Notepad4 and matepath](https://github.com/zufuliu/notepad4/wiki/Build-Notepad4)
 * [Localization](https://github.com/zufuliu/notepad4/wiki/Localization)
+	* [Deutsch](https://github.com/zufuliu/notepad4/tree/main/locale/de) by [@xelsios](https://github.com/xelsios)
 	* [French](https://github.com/zufuliu/notepad4/tree/main/locale/fr) by [@VoilierBleu](https://github.com/VoilierBleu)
 	* [Italiano](https://github.com/zufuliu/notepad4/tree/main/locale/it) by [@Matteo-Nigro](https://github.com/Matteo-Nigro)
+	* [Русский](https://github.com/zufuliu/notepad4/tree/main/locale/ru) by [@tretdm](https://github.com/tretdm)
 	* [日本語](https://github.com/zufuliu/notepad4/tree/main/locale/ja) by [@maboroshin](https://github.com/maboroshin)
 	* [中文 (繁體)](https://github.com/zufuliu/notepad4/tree/main/locale/zh-Hant)
 	* [中文 (简体)](https://github.com/zufuliu/notepad4/tree/main/locale/zh-Hans)

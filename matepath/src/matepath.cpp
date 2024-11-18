@@ -87,8 +87,6 @@ WCHAR	tchFavoritesDir[MAX_PATH];
 WCHAR	tchOpenWithDir[MAX_PATH];
 static WCHAR tchToolbarButtons[MAX_TOOLBAR_BUTTON_CONFIG_BUFFER_SIZE];
 static LPWSTR tchToolbarBitmap = nullptr;
-static LPWSTR tchToolbarBitmapHot = nullptr;
-static LPWSTR tchToolbarBitmapDisabled = nullptr;
 bool	bClearReadOnly;
 bool	bRenameOnCollision;
 bool	bSingleClick;
@@ -108,7 +106,7 @@ bool	bMinimizeToTray;
 bool	fUseRecycleBin;
 bool	fNoConfirmDelete;
 static bool bShowToolbar;
-static bool bAutoScaleToolbar;
+static int iAutoScaleToolbar;
 static bool bShowStatusbar;
 static bool bShowDriveBox;
 int		cxRunDlg;
@@ -234,12 +232,6 @@ static inline bool HasFilter() noexcept {
 static void CleanUpResources(bool initialized) noexcept {
 	if (tchToolbarBitmap != nullptr) {
 		LocalFree(tchToolbarBitmap);
-	}
-	if (tchToolbarBitmapHot != nullptr) {
-		LocalFree(tchToolbarBitmapHot);
-	}
-	if (tchToolbarBitmapDisabled != nullptr) {
-		LocalFree(tchToolbarBitmapDisabled);
 	}
 	if (hTrayIcon) {
 		DestroyIcon(hTrayIcon);
@@ -835,7 +827,7 @@ LRESULT MsgCreate(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 	};
 	ListView_SetExtendedListViewStyle(hwndDirList, LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP);
 	ListView_InsertColumn(hwndDirList, 0, &lvc);
-	DirList_Init(hwndDirList, nullptr);
+	DirList_Init(hwndDirList);
 	if (bTrackSelect) {
 		ListView_SetExtendedListViewStyleEx(hwndDirList,
 											LVS_EX_TRACKSELECT | LVS_EX_ONECLICKACTIVATE,
@@ -895,74 +887,44 @@ void CreateBars(HWND hwnd, HINSTANCE hInstance) noexcept {
 
 	SendMessage(hwndToolbar, TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
 
+	bool internalBitmap = false;
+	const int scale = iAutoScaleToolbar;
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+	const UINT dpi = (scale > USER_DEFAULT_SCREEN_DPI) ? (g_uCurrentDPI + scale - USER_DEFAULT_SCREEN_DPI) : g_uCurrentDPI;
+#else
+	const UINT dpi = g_uCurrentDPI;
+#endif
 	// Add normal Toolbar Bitmap
 	HBITMAP hbmp = nullptr;
-	HBITMAP hbmpCopy = nullptr;
-	bool bExternalBitmap = false;
-
 	if (tchToolbarBitmap != nullptr) {
 		hbmp = LoadBitmapFile(tchToolbarBitmap);
 	}
-	if (hbmp != nullptr) {
-		bExternalBitmap = true;
-	} else {
-		const int resource = GetBitmapResourceIdForCurrentDPI(IDB_TOOLBAR16);
+	if (hbmp == nullptr) {
+		internalBitmap = true;
+		const int resource = GetBitmapResourceIdForDPI(IDB_TOOLBAR16, dpi);
 		hbmp = static_cast<HBITMAP>(LoadImage(g_exeInstance, MAKEINTRESOURCE(resource), IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
 	}
-	if (bAutoScaleToolbar) {
-		hbmp = ResizeImageForCurrentDPI(hbmp);
+	if (scale != 0) {
+		hbmp = ResizeImageForDPI(hbmp, dpi);
 	}
 
 	BITMAP bmp;
 	GetObject(hbmp, sizeof(BITMAP), &bmp);
-
 	HIMAGELIST himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
 	ImageList_AddMasked(himl, hbmp, CLR_DEFAULT);
-	DeleteObject(hbmp);
 	SendMessage(hwndToolbar, TB_SETIMAGELIST, 0, AsInteger<LPARAM>(himl));
 
-	// Optionally add hot Toolbar Bitmap
-	if (tchToolbarBitmapHot != nullptr) {
-		hbmp = LoadBitmapFile(tchToolbarBitmapHot);
-		if (hbmp != nullptr) {
-			if (bAutoScaleToolbar) {
-				hbmp = ResizeImageForCurrentDPI(hbmp);
-			}
-			GetObject(hbmp, sizeof(BITMAP), &bmp);
-			himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
-			ImageList_AddMasked(himl, hbmp, CLR_DEFAULT);
-			DeleteObject(hbmp);
-			SendMessage(hwndToolbar, TB_SETHOTIMAGELIST, 0, AsInteger<LPARAM>(himl));
-		}
-	}
-
-	// Optionally add disabled Toolbar Bitmap
-	if (tchToolbarBitmapDisabled != nullptr) {
-		hbmp = LoadBitmapFile(tchToolbarBitmapDisabled);
-		if (hbmp != nullptr) {
-			if (bAutoScaleToolbar) {
-				hbmp = ResizeImageForCurrentDPI(hbmp);
-			}
-			GetObject(hbmp, sizeof(BITMAP), &bmp);
-			himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
-			ImageList_AddMasked(himl, hbmp, CLR_DEFAULT);
-			DeleteObject(hbmp);
-			SendMessage(hwndToolbar, TB_SETDISABLEDIMAGELIST, 0, AsInteger<LPARAM>(himl));
-			bExternalBitmap = true;
-		}
-	}
-
-	if (!bExternalBitmap) {
+	if (internalBitmap) {
+		HBITMAP hbmpCopy = static_cast<HBITMAP>(CopyImage(hbmp, IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
 		const bool fProcessed = BitmapAlphaBlend(hbmpCopy, GetSysColor(COLOR_3DFACE), 0x60);
 		if (fProcessed) {
 			himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
 			ImageList_AddMasked(himl, hbmpCopy, CLR_DEFAULT);
 			SendMessage(hwndToolbar, TB_SETDISABLEDIMAGELIST, 0, AsInteger<LPARAM>(himl));
 		}
-	}
-	if (hbmpCopy) {
 		DeleteObject(hbmpCopy);
 	}
+	DeleteObject(hbmp);
 
 #if NP2_ENABLE_CUSTOMIZE_TOOLBAR_LABELS
 	// Load toolbar labels
@@ -1216,7 +1178,10 @@ void MsgInitMenu(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 
 	CheckCmd(hmenu, IDM_VIEW_TOOLBAR, bShowToolbar);
 	EnableCmd(hmenu, IDM_VIEW_CUSTOMIZETB, bShowToolbar);
-	CheckCmd(hmenu, IDM_VIEW_AUTO_SCALE_TOOLBAR, bAutoScaleToolbar);
+	CheckCmd(hmenu, IDM_VIEW_AUTO_SCALE_TOOLBAR, iAutoScaleToolbar);
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+	CheckCmd(hmenu, IDM_VIEW_USE_LARGE_TOOLBAR, iAutoScaleToolbar > USER_DEFAULT_SCREEN_DPI);
+#endif
 	CheckCmd(hmenu, IDM_VIEW_STATUSBAR, bShowStatusbar);
 	CheckCmd(hmenu, IDM_VIEW_DRIVEBOX, bShowDriveBox);
 
@@ -1760,9 +1725,20 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 		break;
 
 	case IDM_VIEW_AUTO_SCALE_TOOLBAR:
-		bAutoScaleToolbar = !bAutoScaleToolbar;
+		iAutoScaleToolbar = iAutoScaleToolbar ? 0 : USER_DEFAULT_SCREEN_DPI;
 		MsgThemeChanged(hwnd, 0, 0);
 		break;
+
+#if NP2_ENABLE_HIDPI_IMAGE_RESOURCE
+	case IDM_VIEW_USE_LARGE_TOOLBAR:
+		if (iAutoScaleToolbar >= USER_DEFAULT_SCREEN_DPI && iAutoScaleToolbar < USER_DEFAULT_SCREEN_DPI*2) {
+			iAutoScaleToolbar += USER_DEFAULT_SCREEN_DPI/2;
+		} else {
+			iAutoScaleToolbar = USER_DEFAULT_SCREEN_DPI;
+		}
+		MsgThemeChanged(hwnd, 0, 0);
+		break;
+#endif
 
 	case IDM_VIEW_STATUSBAR:
 		bShowStatusbar = !bShowStatusbar;
@@ -2130,7 +2106,7 @@ LRESULT MsgNotify(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 			break;
 
 		case LVN_GETDISPINFO:
-			DirList_GetDispInfo(hwndDirList, lParam, flagNoFadeHidden);
+			DirList_GetDispInfo(hwndDirList, lParam);
 			break;
 
 		case LVN_DELETEITEM:
@@ -2427,6 +2403,9 @@ void ValidateUILangauge() noexcept {
 	case LANG_PORTUGUESE:
 		languageResID = IDS_LANG_PORTUGUESE_BRAZIL;
 		break;
+	case LANG_RUSSIAN:
+		languageResID = IDS_LANG_RUSSIAN;
+		break;
 	case LANG_NEUTRAL:
 	default:
 		languageResID = IDS_LANG_USER_DEFAULT;
@@ -2467,6 +2446,9 @@ void SetUILanguage(int resID) noexcept {
 		break;
 	case IDS_LANG_PORTUGUESE_BRAZIL:
 		lang = MAKELANGID(LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN);
+		break;
+	case IDS_LANG_RUSSIAN:
+		lang = MAKELANGID(LANG_RUSSIAN, SUBLANG_DEFAULT);
 		break;
 	}
 
@@ -2620,28 +2602,9 @@ void LoadSettings() noexcept {
 	}
 
 	bShowToolbar = section.GetBool(L"ShowToolbar", true);
-	bAutoScaleToolbar = section.GetBool(L"AutoScaleToolbar", true);
+	iAutoScaleToolbar = section.GetInt(L"AutoScaleToolbar", USER_DEFAULT_SCREEN_DPI);
 	bShowStatusbar = section.GetBool(L"ShowStatusbar", true);
 	bShowDriveBox = section.GetBool(L"ShowDriveBox", true);
-
-	// toolbar image
-	{
-		LoadIniSection(INI_SECTION_NAME_TOOLBAR_IMAGES, pIniSectionBuf, cchIniSection);
-		section.Parse(pIniSectionBuf);
-
-		strValue = section.GetValue(L"BitmapDefault");
-		if (StrNotEmpty(strValue)) {
-			tchToolbarBitmap = StrDup(strValue);
-		}
-		strValue = section.GetValue(L"BitmapHot");
-		if (StrNotEmpty(strValue)) {
-			tchToolbarBitmapHot = StrDup(strValue);
-		}
-		strValue = section.GetValue(L"BitmapDisabled");
-		if (StrNotEmpty(strValue)) {
-			tchToolbarBitmapDisabled = StrDup(strValue);
-		}
-	}
 
 	// window position section
 	{
@@ -2802,7 +2765,7 @@ void SaveSettings(bool bSaveSettingsNow) noexcept {
 	Toolbar_GetButtons(hwndToolbar, TOOLBAR_COMMAND_BASE, tchToolbarButtons, COUNTOF(tchToolbarButtons));
 	section.SetStringEx(L"ToolbarButtons", tchToolbarButtons, DefaultToolbarButtons);
 	section.SetBoolEx(L"ShowToolbar", bShowToolbar, true);
-	section.SetBoolEx(L"AutoScaleToolbar", bAutoScaleToolbar, true);
+	section.SetIntEx(L"AutoScaleToolbar", iAutoScaleToolbar, USER_DEFAULT_SCREEN_DPI);
 	section.SetBoolEx(L"ShowStatusbar", bShowStatusbar, true);
 	section.SetBoolEx(L"ShowDriveBox", bShowDriveBox, true);
 
@@ -3070,8 +3033,13 @@ void LoadFlags() noexcept {
 	const int iValue = section.GetInt(L"OpacityLevel", 75);
 	iOpacityLevel = validate(iValue, 0, 100, 75);
 
+	LPCWSTR strValue = section.GetValue(L"ToolbarImage");
+	if (StrNotEmpty(strValue)) {
+		tchToolbarBitmap = StrDup(strValue);
+	}
+
 	if (StrIsEmpty(g_wchAppUserModelID)) {
-		LPCWSTR strValue = section.GetValue(L"ShellAppUserModelID");
+		strValue = section.GetValue(L"ShellAppUserModelID");
 		if (StrNotEmpty(strValue)) {
 			lstrcpyn(g_wchAppUserModelID, strValue, COUNTOF(g_wchAppUserModelID));
 		} else {

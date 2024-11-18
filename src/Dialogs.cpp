@@ -589,7 +589,7 @@ static INT_PTR CALLBACK OpenWithDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LPA
 #endif
 		};
 		ListView_InsertColumn(hwndLV, 0, &lvc);
-		DirList_Init(hwndLV, nullptr);
+		DirList_Init(hwndLV);
 		DirList_Fill(hwndLV, tchOpenWithDir, DL_ALLOBJECTS, nullptr, false, flagNoFadeHidden, DS_NAME, false);
 		DirList_StartIconThread(hwndLV);
 		ListView_SetItemState(hwndLV, 0, LVIS_FOCUSED, LVIS_FOCUSED);
@@ -636,7 +636,7 @@ static INT_PTR CALLBACK OpenWithDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LPA
 		if (pnmh->idFrom == IDC_OPENWITHDIR) {
 			switch (pnmh->code) {
 			case LVN_GETDISPINFO:
-				DirList_GetDispInfo(GetDlgItem(hwnd, IDC_OPENWITHDIR), lParam, flagNoFadeHidden);
+				DirList_GetDispInfo(GetDlgItem(hwnd, IDC_OPENWITHDIR), lParam);
 				break;
 
 			case LVN_DELETEITEM:
@@ -765,7 +765,7 @@ static INT_PTR CALLBACK FavoritesDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LP
 #endif
 		};
 		ListView_InsertColumn(hwndLV, 0, &lvc);
-		DirList_Init(hwndLV, nullptr);
+		DirList_Init(hwndLV);
 		DirList_Fill(hwndLV, tchFavoritesDir, DL_ALLOBJECTS, nullptr, false, flagNoFadeHidden, DS_NAME, false);
 		DirList_StartIconThread(hwndLV);
 		ListView_SetItemState(hwndLV, 0, LVIS_FOCUSED, LVIS_FOCUSED);
@@ -812,7 +812,7 @@ static INT_PTR CALLBACK FavoritesDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LP
 		if (pnmh->idFrom == IDC_FAVORITESDIR) {
 			switch (pnmh->code) {
 			case LVN_GETDISPINFO:
-				DirList_GetDispInfo(GetDlgItem(hwnd, IDC_OPENWITHDIR), lParam, flagNoFadeHidden);
+				DirList_GetDispInfo(GetDlgItem(hwnd, IDC_OPENWITHDIR), lParam);
 				break;
 
 			case LVN_DELETEITEM:
@@ -984,6 +984,7 @@ bool AddToFavDlg(HWND hwnd, LPCWSTR lpszName, LPCWSTR lpszTarget) {
 //
 extern MRUList mruFile;
 extern bool bSaveRecentFiles;
+extern int iMaxRecentFiles;
 extern int cxFileMRUDlg;
 extern int cyFileMRUDlg;
 
@@ -1092,6 +1093,7 @@ static INT_PTR CALLBACK FileMRUDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LPAR
 
 		// Update view
 		SendWMCommand(hwnd, IDC_FILEMRU_UPDATE_VIEW);
+		SetDlgItemInt(hwnd, IDC_MRU_COUNT_VALUE, iMaxRecentFiles, FALSE);
 
 		if (bSaveRecentFiles) {
 			CheckDlgButton(hwnd, IDC_SAVEMRU, BST_CHECKED);
@@ -1108,6 +1110,8 @@ static INT_PTR CALLBACK FileMRUDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LPAR
 		GlobalFree(worker);
 
 		bSaveRecentFiles = IsButtonChecked(hwnd, IDC_SAVEMRU);
+		iMaxRecentFiles = GetDlgItemInt(hwnd, IDC_MRU_COUNT_VALUE, nullptr, FALSE);
+		iMaxRecentFiles = max(iMaxRecentFiles, MRU_MAXITEMS);
 
 		ResizeDlg_Destroy(hwnd, &cxFileMRUDlg, &cyFileMRUDlg);
 	}
@@ -1126,6 +1130,8 @@ static INT_PTR CALLBACK FileMRUDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LPAR
 		hdwp = DeferCtlPos(hdwp, hwnd, IDC_FILEMRU, dx, dy, SWP_NOMOVE);
 		hdwp = DeferCtlPos(hdwp, hwnd, IDC_EMPTY_MRU, dx, dy, SWP_NOSIZE);
 		hdwp = DeferCtlPos(hdwp, hwnd, IDC_SAVEMRU, 0, dy, SWP_NOSIZE);
+		hdwp = DeferCtlPos(hdwp, hwnd, IDC_MRU_COUNT_LABEL, 0, dy, SWP_NOSIZE);
+		hdwp = DeferCtlPos(hdwp, hwnd, IDC_MRU_COUNT_VALUE, 0, dy, SWP_NOSIZE);
 		EndDeferWindowPos(hdwp);
 		ListView_SetColumnWidth(GetDlgItem(hwnd, IDC_FILEMRU), 0, LVSCW_AUTOSIZE_USEHEADER);
 	}

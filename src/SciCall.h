@@ -260,6 +260,14 @@ inline void SciCall_EndUndoAction() noexcept {
 	SciCall(SCI_ENDUNDOACTION, 0, 0);
 }
 
+inline int SciCall_GetUndoActions() noexcept {
+	return static_cast<int>(SciCall(SCI_GETUNDOACTIONS, 0, 0));
+}
+
+inline void SciCall_SetChangeHistory(int changeHistory) noexcept {
+	SciCall(SCI_SETCHANGEHISTORY, changeHistory, 0);
+}
+
 // Selection and information
 
 inline Sci_Position SciCall_GetLength() noexcept {
@@ -1362,6 +1370,10 @@ inline void SciCall_SetAutomaticFold(int automaticFold) noexcept {
 
 inline void SciCall_EnsureVisible(Sci_Line line) noexcept {
 	SciCall(SCI_ENSUREVISIBLE, line, 0);
+}
+
+inline void SciCall_EnsureVisibleEnforcePolicy(Sci_Line line) noexcept {
+	SciCall(SCI_ENSUREVISIBLEENFORCEPOLICY, line, 0);
 }
 
 // Line wrapping

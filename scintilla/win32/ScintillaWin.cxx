@@ -162,7 +162,6 @@ inline bool KeyboardIsKeyDown(int key) noexcept {
 constexpr sptr_t extendedKeyboard = 1 << 24;
 
 constexpr bool KeyboardIsNumericKeypadFunction(Scintilla::uptr_t wParam, Scintilla::sptr_t lParam) noexcept {
-	// Bit 24 is the extended keyboard flag and the numeric keypad is non-extended
 	if ((lParam & extendedKeyboard) != 0) {
 		// Not from the numeric keypad
 		return false;
@@ -1765,11 +1764,16 @@ sptr_t ScintillaWin::MouseMessage(unsigned int iMessage, uptr_t wParam, sptr_t l
 
 			MouseWheelDelta &wheelDelta = (iMessage == WM_MOUSEHWHEEL) ? horizontalWheelDelta : verticalWheelDelta;
 			if (wheelDelta.Accumulate(wParam)) {
-				const int charsToScroll = charsPerScroll * wheelDelta.Actions();
+				int charsToScroll = charsPerScroll * wheelDelta.Actions();
+				if (iMessage == WM_MOUSEHWHEEL) {
+					// horizontal scroll is in reverse direction
+					charsToScroll = -charsToScroll;
+				}
 				const int widthToScroll = static_cast<int>(std::lround(charsToScroll * vs.aveCharWidth));
 				HorizontalScrollToClamped(xOffset + widthToScroll);
 			}
-			return 0;
+			// return 1 for Logitech mouse, https://www.pretentiousname.com/setpoint_hwheel/index.html
+			return (iMessage == WM_MOUSEHWHEEL) ? 1 : 0;
 		}
 
 		// Either SCROLL or ZOOM. We handle the wheel steppings calculation

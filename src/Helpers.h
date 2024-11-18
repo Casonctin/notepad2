@@ -377,15 +377,19 @@ inline DWORD GetCurrentIconHandleFlags() noexcept {
 }
 
 #if defined(NP2_ENABLE_HIDPI_IMAGE_RESOURCE) && NP2_ENABLE_HIDPI_IMAGE_RESOURCE
-inline int GetBitmapResourceIdForCurrentDPI(int resourceId) noexcept {
-	if (g_uCurrentDPI > USER_DEFAULT_SCREEN_DPI + USER_DEFAULT_SCREEN_DPI/4) {
-		int scale = (g_uCurrentDPI + USER_DEFAULT_SCREEN_DPI/4 - 1) / (USER_DEFAULT_SCREEN_DPI/2);
+inline int GetBitmapResourceIdForDPI(int resourceId, UINT dpi) noexcept {
+	if (dpi > USER_DEFAULT_SCREEN_DPI + USER_DEFAULT_SCREEN_DPI/4) {
+		int scale = (dpi + USER_DEFAULT_SCREEN_DPI/4 - 1) / (USER_DEFAULT_SCREEN_DPI/2);
 		scale = min(scale, 6);
 		resourceId += scale - 2;
 	}
 	return resourceId;
 }
+inline int GetBitmapResourceIdForCurrentDPI(int resourceId) noexcept {
+	return GetBitmapResourceIdForDPI(resourceId, g_uCurrentDPI);
+}
 #else
+#define GetBitmapResourceIdForDPI(resourceId, dpi)		(resourceId)
 #define GetBitmapResourceIdForCurrentDPI(resourceId)	(resourceId)
 #endif
 
@@ -582,7 +586,10 @@ bool IsElevated() noexcept;
 
 bool FindUserResourcePath(LPCWSTR path, LPWSTR outPath) noexcept;
 HBITMAP LoadBitmapFile(LPCWSTR path) noexcept;
-HBITMAP ResizeImageForCurrentDPI(HBITMAP hbmp) noexcept;
+HBITMAP ResizeImageForDPI(HBITMAP hbmp, UINT dpi) noexcept;
+inline HBITMAP ResizeImageForCurrentDPI(HBITMAP hbmp) noexcept {
+	return ResizeImageForDPI(hbmp, g_uCurrentDPI);
+}
 
 bool BitmapMergeAlpha(HBITMAP hbmp, COLORREF crDest) noexcept;
 bool BitmapAlphaBlend(HBITMAP hbmp, COLORREF crDest, BYTE alpha) noexcept;
@@ -789,21 +796,22 @@ enum {
 	MRUFlags_PortableMyDocs = 8,
 };
 
-// MRU_MAXITEMS * (MAX_PATH + 4)
-#define MAX_INI_SECTION_SIZE_MRU	(8 * 1024)
+// num=path\0
+#define MAX_MRU_ITEM_SIZE	(MAX_PATH + 5)
 
 struct MRUList {
 	int		iSize;
+	int		capacity;
 	int		iFlags;
 	LPCWSTR szRegKey;
-	LPWSTR pszItems[MRU_MAXITEMS];
+	LPWSTR *pszItems;
 
-	void Init(LPCWSTR pszRegKey, int flags) noexcept;
+	void Init(LPCWSTR pszRegKey, int capacity_, int flags) noexcept;
 	void Add(LPCWSTR pszNew) noexcept;
 	void AddMultiline(LPCWSTR pszNew) noexcept;
 	void Delete(int iIndex) noexcept;
 	void DeleteFileFromStore(LPCWSTR pszFile) const noexcept;
-	void Empty(bool save) noexcept;
+	void Empty(bool save, bool destroy = false) noexcept;
 	void Load() noexcept;
 	void Save() const noexcept;
 	void MergeSave(bool keep) noexcept;

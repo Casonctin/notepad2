@@ -1437,7 +1437,7 @@ static AddWordResult AutoC_AddSpecWord(WordList &pWList, int iCurrentStyle, int 
 		break;
 
 	case NP2LEX_VISUALBASIC:
-		if (ch == '#' && iCurrentStyle == SCE_B_DEFAULT) {
+		if (ch == '#' && iCurrentStyle == SCE_VB_DEFAULT) {
 			pWList.AddList(pLex->pKeyWords->pszKeyWords[VBKeywordIndex_Preprocessor]);
 			return AddWordResult_Finish;
 		}
@@ -1778,7 +1778,7 @@ void EditCompleteWord(int iCondition, bool autoInsert) noexcept {
 static bool CanAutoCloseSingleQuote(int chPrev, int iCurrentStyle) noexcept {
 	const int iLexer = pLexCurrent->iLexer;
 	if (iCurrentStyle == 0) {
-		if (iLexer == SCLEX_VISUALBASIC || iLexer == SCLEX_VBSCRIPT) {
+		if (iLexer == SCLEX_VISUALBASIC) {
 			return false; // comment
 		}
 	} else {
@@ -1923,15 +1923,15 @@ void EditAutoCloseBraceQuote(int ch, AutoInsertCharacter what) noexcept {
 	}
 }
 
-static inline bool IsHtmlVoidTag(const char *word, int length) noexcept {
+static inline bool IsHtmlVoidTag(const char *word) noexcept {
 	// same as htmlVoidTagList in scintilla/lexlib/DocUtils.h
 	const char *p = StrStrIA(
 		// void elements
 		" area base basefont br col command embed frame hr img input isindex keygen link meta param source track wbr "
 		// end tag can be omitted
-		" p "
+		"p "
 		, word);
-	return p != nullptr && p[-1] == ' ' && p[length] == ' ';
+	return p != nullptr;
 }
 
 void EditAutoCloseXMLTag() noexcept {
@@ -1976,7 +1976,9 @@ void EditAutoCloseXMLTag() noexcept {
 		SciCall_GetTextRangeFull(&tr);
 
 		if (tchBuf[iSize - 2] != '/') {
-			char tchIns[516] = "</";
+			char tchIns[COUNTOF(tchBuf) + 4]{};
+			tchIns[0] = '<';
+			tchIns[1] = ' ';
 			int cchIns = 2;
 			const char *pCur = tchBuf + iSize - 2;
 			while (pCur > tchBuf && *pCur != '<' && *pCur != '>') {
@@ -2003,16 +2005,18 @@ void EditAutoCloseXMLTag() noexcept {
 				}
 			}
 
-			tchIns[cchIns++] = '>';
-			tchIns[cchIns] = '\0';
+			tchIns[cchIns] = ' ';
+			tchIns[cchIns + 1] = '\0';
 
-			shouldAutoClose = cchIns > 3;
-			if (shouldAutoClose && pLexCurrent->iLexer == SCLEX_HTML) {
-				tchIns[cchIns - 1] = '\0';
-				shouldAutoClose = !IsHtmlVoidTag(tchIns + 2, cchIns - 3);
+			if (cchIns > 2 && (pLexCurrent->iLexer == SCLEX_HTML || pLexCurrent->iLexer == SCLEX_PHPSCRIPT)) {
+				if (IsHtmlVoidTag(tchIns + 1)) {
+					autoClosed = true;
+					cchIns = 0;
+				}
 			}
-			if (shouldAutoClose) {
-				tchIns[cchIns - 1] = '>';
+			if (cchIns > 2) {
+				tchIns[1] = '/';
+				tchIns[cchIns] = '>';
 				autoClosed = true;
 				SciCall_ReplaceSel(tchIns);
 				SciCall_SetSel(iCurPos, iCurPos);

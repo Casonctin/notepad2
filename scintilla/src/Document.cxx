@@ -143,29 +143,6 @@ CharacterExtracted::CharacterExtracted(const unsigned char *charBytes, size_t wi
 Document::Document(DocumentOption options) :
 	cb(!FlagSet(options, DocumentOption::StylesNone), FlagSet(options, DocumentOption::TextLarge)),
 	durationStyleOneUnit(1e-6) {
-	refCount = 0;
-#ifdef _WIN32
-	eolMode = EndOfLine::CrLf;
-#else
-	eolMode = EndOfLine::Lf;
-#endif
-	dbcsCodePage = CpUtf8;
-	lineEndBitSet = LineEndType::Default;
-	endStyled = 0;
-	styleClock = 0;
-	enteredModification = 0;
-	enteredStyling = 0;
-	enteredReadOnlyCount = 0;
-	matchesValid = false;
-	insertionSet = false;
-	tabInChars = 8;
-	indentInChars = 0;
-	actualIndentInChars = 8;
-	useTabs = true;
-	tabIndents = true;
-	forwardSafeChar = 0x80;
-	backwardSafeChar = 0x80;
-	backspaceUnindents = false;
 
 	perLineData[ldMarkers] = std::make_unique<LineMarkers>();
 	perLineData[ldLevels] = std::make_unique<LineLevels>();
@@ -275,11 +252,16 @@ bool Document::SetDBCSCodePage(int dbcsCodePage_) {
 		DBCSCharClassify *classify = nullptr;
 		forwardSafeChar = 0xff;
 		backwardSafeChar = 0xff;
+		asciiForwardSafeChar = 0xff;
+		asciiBackwardSafeChar = 0xff;
 		if (dbcsCodePage) {
-			forwardSafeChar = 0x80;
-			backwardSafeChar = 0x80;
+			forwardSafeChar = 0x7f;
+			backwardSafeChar = 0x7f;
 			if (CpUtf8 != dbcsCodePage) {
-				// minimum trail byte
+				// minimum lead byte - 1
+				forwardSafeChar = 0x80;
+				asciiForwardSafeChar = 0x80;
+				// minimum trail byte - 1
 				switch (dbcsCodePage) {
 				default:
 					backwardSafeChar = 0x40 - 1;
@@ -291,6 +273,7 @@ bool Document::SetDBCSCodePage(int dbcsCodePage_) {
 					backwardSafeChar = 0x31 - 1;
 					break;
 				}
+				asciiBackwardSafeChar = backwardSafeChar;
 				classify = new DBCSCharClassify(dbcsCodePage);
 			}
 		}
@@ -2962,30 +2945,33 @@ static constexpr char BraceOpposite(char ch) noexcept {
 
 // TODO: should be able to extend styled region to find matching brace
 Sci::Position Document::BraceMatch(Sci::Position position, Sci::Position /*maxReStyle*/, Sci::Position startPos, bool useStartPos) const noexcept {
-	const char chBrace = CharAt(position);
-	const char chSeek = BraceOpposite(chBrace);
+	const unsigned char chBrace = CharAt(position);
+	const unsigned char chSeek = BraceOpposite(chBrace);
 	if (chSeek == '\0')
 		return -1;
 	const int styBrace = StyleIndexAt(position);
 	const int direction = (chBrace < chSeek) ? 1 : -1;
-	int depth = 1;
+	const unsigned char safeChar = (direction >= 0) ? asciiForwardSafeChar : asciiBackwardSafeChar;
 	position = useStartPos ? startPos : NextPosition(position, direction);
 	const Sci::Position length = LengthNoExcept();
+	int depth = 1;
 	while (IsValidIndex(position, length)) {
-		const char chAtPos = CharAt(position);
-		const int styAtPos = StyleIndexAt(position);
-		if ((position > GetEndStyled()) || (styAtPos == styBrace)) {
-			if (chAtPos == chBrace)
-				depth++;
-			if (chAtPos == chSeek)
-				depth--;
-			if (depth == 0)
-				return position;
+		const unsigned char chAtPos = CharAt(position);
+		if (chAtPos == chBrace || chAtPos == chSeek) {
+			if ((position > GetEndStyled()) || (StyleIndexAt(position) == styBrace)) {
+				depth += (chAtPos == chBrace) ? 1 : -1;
+				if (depth == 0) {
+					return position;
+				}
+			}
+			position += direction;
+		} else if (chAtPos <= safeChar) {
+			position += direction;
+		} else {
+			if (!NextCharacter(position, direction)) {
+				break;
+			}
 		}
-		const Sci::Position positionBeforeMove = position;
-		position = NextPosition(position, direction);
-		if (position == positionBeforeMove)
-			break;
 	}
 	return -1;
 }

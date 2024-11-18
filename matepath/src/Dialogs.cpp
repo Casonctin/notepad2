@@ -374,11 +374,9 @@ INT_PTR CALLBACK GotoDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LPARAM lParam)
 			}
 		}
 
-		// from WinUser.h: GetComboBoxInfo() since Windows Vista, but CB_GETCOMBOBOXINFO since Windows XP.
 		COMBOBOXINFO cbi;
-		memset(&cbi, 0, sizeof(COMBOBOXINFO));
 		cbi.cbSize = sizeof(COMBOBOXINFO);
-		if (SendMessage(hwndGoto, CB_GETCOMBOBOXINFO, 0, AsInteger<LPARAM>(&cbi))) {
+		if (GetComboBoxInfo(hwndGoto, &cbi)) {
 			SHAutoComplete(cbi.hwndItem, SHACF_FILESYSTEM);
 		}
 		CenterDlgInParent(hwnd);
@@ -843,8 +841,6 @@ INT_PTR CALLBACK ItemsPageProc(HWND hwnd, UINT umsg, WPARAM wParam, LPARAM lPara
 	static HBRUSH m_hbrNoFilter;
 	static HBRUSH m_hbrFilter;
 
-	CHOOSECOLOR cc;
-
 	switch (umsg) {
 	case WM_INITDIALOG: {
 		m_bDefColorNoFilter = bDefColorNoFilter;
@@ -910,40 +906,32 @@ INT_PTR CALLBACK ItemsPageProc(HWND hwnd, UINT umsg, WPARAM wParam, LPARAM lPara
 			break;
 
 		case IDC_COLOR_PICK1:
+		case IDC_COLOR_PICK2: {
+			CHOOSECOLOR cc;
 			memset(&cc, 0, sizeof(CHOOSECOLOR));
 
 			cc.lStructSize = sizeof(CHOOSECOLOR);
 			cc.hwndOwner = hwnd;
-			cc.rgbResult = m_colorNoFilter;
+			cc.rgbResult = (LOWORD(wParam) == IDC_COLOR_PICK1) ? m_colorNoFilter : m_colorFilter;
 			cc.lpCustColors = colorCustom;
 			cc.Flags = CC_RGBINIT | CC_SOLIDCOLOR;
 
 			if (ChooseColor(&cc)) {
-				DeleteObject(m_hbrNoFilter);
-				m_colorNoFilter = cc.rgbResult;
-				m_hbrNoFilter = CreateSolidBrush(m_colorNoFilter);
+				if (LOWORD(wParam) == IDC_COLOR_PICK1) {
+					DeleteObject(m_hbrNoFilter);
+					m_colorNoFilter = cc.rgbResult;
+					m_hbrNoFilter = CreateSolidBrush(m_colorNoFilter);
+				} else {
+					DeleteObject(m_hbrFilter);
+					m_colorFilter = cc.rgbResult;
+					m_hbrFilter = CreateSolidBrush(m_colorFilter);
+				}
 			}
 
-			InvalidateRect(GetDlgItem(hwnd, IDC_COLOR_SAMP1), nullptr, TRUE);
-			break;
+			static_assert(IDC_COLOR_SAMP1 - IDC_COLOR_PICK1 == IDC_COLOR_SAMP2 - IDC_COLOR_PICK2);
+			InvalidateRect(GetDlgItem(hwnd, LOWORD(wParam) + IDC_COLOR_SAMP1 - IDC_COLOR_PICK1), nullptr, TRUE);
+		} break;
 
-		case IDC_COLOR_PICK2:
-			memset(&cc, 0, sizeof(CHOOSECOLOR));
-
-			cc.lStructSize = sizeof(CHOOSECOLOR);
-			cc.hwndOwner = hwnd;
-			cc.rgbResult = m_colorFilter;
-			cc.lpCustColors = colorCustom;
-			cc.Flags = CC_RGBINIT | CC_SOLIDCOLOR;
-
-			if (ChooseColor(&cc)) {
-				DeleteObject(m_hbrFilter);
-				m_colorFilter = cc.rgbResult;
-				m_hbrFilter = CreateSolidBrush(m_colorFilter);
-			}
-
-			InvalidateRect(GetDlgItem(hwnd, IDC_COLOR_SAMP2), nullptr, TRUE);
-			break;
 		}
 		return TRUE;
 
@@ -1292,7 +1280,6 @@ extern int cxFileFilterDlg;
 INT_PTR OptionsPropSheet(HWND hwnd, HINSTANCE hInstance) noexcept {
 	PROPSHEETHEADER psh;
 	PROPSHEETPAGE psp[4];
-	INT_PTR nResult;
 
 	memset(&psh, 0, sizeof(PROPSHEETHEADER));
 	memset(psp, 0, sizeof(psp));
@@ -1330,7 +1317,7 @@ INT_PTR OptionsPropSheet(HWND hwnd, HINSTANCE hInstance) noexcept {
 	psh.nStartPage  = 0;
 	psh.ppsp        = psp;
 
-	nResult = PropertySheet(&psh);
+	const INT_PTR nResult = PropertySheet(&psh);
 
 	if (psp[0].pResource) {
 		NP2HeapFree(const_cast<DLGTEMPLATE *>(psp[0].pResource));
@@ -1900,7 +1887,7 @@ INT_PTR CALLBACK OpenWithDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LPARAM lPa
 #endif
 		};
 		ListView_InsertColumn(hwndLV, 0, &lvc);
-		DirList_Init(hwndLV, nullptr);
+		DirList_Init(hwndLV);
 		DirList_Fill(hwndLV, tchOpenWithDir, DL_ALLOBJECTS, nullptr, false, flagNoFadeHidden, DS_NAME, false);
 		DirList_StartIconThread(hwndLV);
 		ListView_SetItemState(hwndLV, 0, LVIS_FOCUSED, LVIS_FOCUSED);
@@ -1947,7 +1934,7 @@ INT_PTR CALLBACK OpenWithDlgProc(HWND hwnd, UINT umsg, WPARAM wParam, LPARAM lPa
 			HWND hwndLV = GetDlgItem(hwnd, IDC_OPENWITHDIR);
 			switch (pnmh->code) {
 			case LVN_GETDISPINFO:
-				DirList_GetDispInfo(hwndLV, lParam, flagNoFadeHidden);
+				DirList_GetDispInfo(hwndLV, lParam);
 				break;
 
 			case LVN_DELETEITEM:

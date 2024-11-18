@@ -44,6 +44,7 @@
 #define NP2StyleX_CallTip				EDITSTYLE_HOLE(CallTip, L"CallTip")
 #define NP2StyleX_CodeFolding			EDITSTYLE_HOLE(CodeFolding, L"Code Folding")
 #define NP2StyleX_Link					EDITSTYLE_HOLE(Link, L"Link")
+#define NP2StyleX_ChangeHistoryMarker	EDITSTYLE_HOLE(ChangeHistoryMarker, L"Change History Marker")
 
 #define NP2StyleX_Default				EDITSTYLE_HOLE(Default, L"Default")
 #define NP2StyleX_Comment				EDITSTYLE_HOLE(Comment, L"Comment")
@@ -216,6 +217,7 @@
 #define NP2StyleX_Parameter				EDITSTYLE_HOLE(Parameter, L"Parameter")
 #define NP2StyleX_InlineExpansion		EDITSTYLE_HOLE(InlineExpansion, L"Inline Expansion")
 #define NP2StyleX_Pragma				EDITSTYLE_HOLE(Pragma, L"Pragma")
+#define NP2StyleX_HardLineBreak			EDITSTYLE_HOLE(HardLineBreak, L"Hard Line Break")
 
 #define NP2StyleX_Section				EDITSTYLE_HOLE(Section, L"Section")
 #define NP2StyleX_Assignment			EDITSTYLE_HOLE(Assignment, L"Assignment")
