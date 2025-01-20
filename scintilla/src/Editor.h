@@ -293,6 +293,14 @@ protected:	// ScintillaBase subclass needs access to much of Editor
 
 	Scintilla::AutomaticFold foldAutomatic;
 
+	int batchUpdateDepth;
+	struct BatchUpdateSavedState {
+		ModificationFlags modEventMask;
+		int actions;
+		Sci::Line lines;
+	};
+	BatchUpdateSavedState batchUpdateState;
+
 	// Wrapping support
 	WrapPending wrapPending;
 
@@ -319,7 +327,7 @@ protected:	// ScintillaBase subclass needs access to much of Editor
 	PRectangle GetTextRectangle() const noexcept;
 
 	Sci::Line LinesOnScreen() const noexcept override;
-	void OnLineWrapped(Sci::Line lineDoc, int linesWrapped) override;
+	void OnLineWrapped(Sci::Line lineDoc, int linesWrapped, int option) override;
 	Sci::Line LinesToScroll() const noexcept;
 	Sci::Line MaxScrollPos() const noexcept;
 	SelectionPosition ClampPositionIntoDocument(SelectionPosition sp) const noexcept;
@@ -465,7 +473,7 @@ protected:	// ScintillaBase subclass needs access to much of Editor
 	virtual int GetCtrlID() const noexcept {
 		return ctrlID;
 	}
-	virtual void NotifyParent(Scintilla::NotificationData scn) noexcept = 0;
+	virtual void NotifyParent(Scintilla::NotificationData &scn) const noexcept = 0;
 	virtual void NotifyStyleToNeeded(Sci::Position endStyleNeeded);
 	void NotifyChar(int ch, Scintilla::CharacterSource charSource, bool handled = false) noexcept;
 	void NotifySavePoint(bool isSavePoint) noexcept;
@@ -702,6 +710,8 @@ public:
 	bool IsUnicodeMode() const noexcept;
 	// Public so scintilla_send_message can use it.
 	virtual Scintilla::sptr_t WndProc(Scintilla::Message iMessage, Scintilla::uptr_t wParam, Scintilla::sptr_t lParam);
+	void BeginBatchUpdate() noexcept;
+	void EndBatchUpdate() noexcept;
 	// Public so scintilla_set_id can use it.
 	int ctrlID;
 	// Public so COM methods for drag and drop can set it.

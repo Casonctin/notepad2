@@ -140,7 +140,7 @@ int	iChangeHistoryMarker;
 EditAutoCompletionConfig autoCompletionConfig;
 int iSelectOption;
 static int iLineSelectionMode;
-static bool bShowCodeFolding;
+bool bShowCodeFolding;
 extern CallTipInfo callTipInfo;
 static bool bViewWhiteSpace;
 static bool bViewEOLs;
@@ -176,8 +176,7 @@ RECT	pageSetupMargin;
 static bool bSaveBeforeRunningTools;
 bool bOpenFolderWithMatepath;
 FileWatchingMode iFileWatchingMode;
-bool	iFileWatchingMethod;
-bool	bFileWatchingKeepAtEnd;
+int iFileWatchingOption;
 bool	bResetFileWatching;
 static DWORD dwFileCheckInterval;
 static DWORD dwAutoReloadTimeout;
@@ -1419,7 +1418,7 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT umsg, WPARAM wParam, LPARAM lParam)
 			if ((iFileWatchingMode == FileWatchingMode_AutoReload && !IsDocumentModified())
 				|| MsgBoxWarn(MB_YESNO, IDS_FILECHANGENOTIFY) == IDYES) {
 				const bool bIsTail = (iFileWatchingMode == FileWatchingMode_AutoReload)
-					&& (bFileWatchingKeepAtEnd || (SciCall_LineFromPosition(SciCall_GetCurrentPos()) + 1 == SciCall_GetLineCount()));
+					&& ((iFileWatchingOption & FileWatchingOption_KeepAtEnd) || (SciCall_LineFromPosition(SciCall_GetCurrentPos()) + 1 == SciCall_GetLineCount()));
 
 				iWeakSrcEncoding = iCurrentEncoding;
 				if (FileLoad(static_cast<FileLoadFlag>(FileLoadFlag_DontSave | FileLoadFlag_Reload), szCurFile)) {
@@ -1648,11 +1647,6 @@ void UpdateBookmarkMarginWidth() noexcept {
 	// 16px for XPM bookmark symbol.
 	//const int width = (bShowBookmarkMargin || iChangeHistoryMarker != SC_CHANGE_HISTORY_DISABLED) ? max(SciCall_TextHeight() - 2, 16) : 0;
 	SciCall_SetMarginWidth(MarginNumber_Bookmark, width);
-}
-
-void UpdateFoldMarginWidth() noexcept {
-	const int width = bShowCodeFolding ? SciCall_TextWidth(STYLE_LINENUMBER, "+_") : 0;
-	SciCall_SetMarginWidth(MarginNumber_CodeFolding, width);
 }
 
 void SetWrapVisualFlags() noexcept {
@@ -2193,6 +2187,9 @@ void ValidateUILangauge() noexcept {
 	case LANG_KOREAN:
 		languageMenu = IDM_LANG_KOREAN;
 		break;
+	case LANG_POLISH:
+		languageMenu = IDM_LANG_POLISH;
+		break;
 	case LANG_PORTUGUESE:
 		languageMenu = IDM_LANG_PORTUGUESE_BRAZIL;
 		break;
@@ -2236,6 +2233,9 @@ void SetUILanguage(int menu) noexcept {
 		break;
 	case IDM_LANG_KOREAN:
 		lang = MAKELANGID(LANG_KOREAN, SUBLANG_DEFAULT);
+		break;
+	case IDM_LANG_POLISH:
+		lang = MAKELANGID(LANG_POLISH, SUBLANG_DEFAULT);
 		break;
 	case IDM_LANG_PORTUGUESE_BRAZIL:
 		lang = MAKELANGID(LANG_PORTUGUESE, SUBLANG_PORTUGUESE_BRAZILIAN);
@@ -4535,6 +4535,7 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 	case IDM_LANG_PORTUGUESE_BRAZIL:
 	case IDM_LANG_FRENCH_FRANCE:
 	case IDM_LANG_RUSSIAN:
+	case IDM_LANG_POLISH:
 		SetUILanguage(LOWORD(wParam));
 		break;
 #endif
@@ -5063,8 +5064,8 @@ LRESULT MsgNotify(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 
 			case StatusItem_EolMode: {
 				constexpr UINT mask = (SC_EOL_LF << 2*SC_EOL_CRLF) | (SC_EOL_CR << 2*SC_EOL_LF) | (SC_EOL_CRLF << 2*SC_EOL_CR);
-				iCurrentEOLMode = (mask >> (iCurrentEOLMode << 1)) & 3;
-				ConvertLineEndings(iCurrentEOLMode);
+				const int iNewEOLMode = (mask >> (iCurrentEOLMode << 1)) & 3;
+				ConvertLineEndings(iNewEOLMode);
 				return TRUE;
 			}
 
@@ -5310,8 +5311,7 @@ void LoadSettings() noexcept {
 
 	iValue = section.GetInt(L"FileWatchingMode", FileWatchingMode_AutoReload);
 	iFileWatchingMode = clamp(static_cast<FileWatchingMode>(iValue), FileWatchingMode_None, FileWatchingMode_AutoReload);
-	iFileWatchingMethod = section.GetBool(L"FileWatchingMethod", false);
-	bFileWatchingKeepAtEnd = section.GetBool(L"FileWatchingKeepAtEnd", false);
+	iFileWatchingOption = section.GetInt(L"FileWatchingOption", FileWatchingOption_None);
 	bResetFileWatching = section.GetBool(L"ResetFileWatching", false);
 
 	iAutoSaveOption = section.GetInt(L"AutoSaveOption", AutoSaveOption_Default);
@@ -5584,8 +5584,7 @@ void SaveSettings(bool bSaveSettingsNow) noexcept {
 	section.SetBoolEx(L"OpenFolderWithMatepath", bOpenFolderWithMatepath, true);
 
 	section.SetIntEx(L"FileWatchingMode", iFileWatchingMode, FileWatchingMode_AutoReload);
-	section.SetBoolEx(L"FileWatchingMethod", iFileWatchingMethod, false);
-	section.SetBoolEx(L"FileWatchingKeepAtEnd", bFileWatchingKeepAtEnd, false);
+	section.SetIntEx(L"FileWatchingOption", iFileWatchingOption, FileWatchingOption_None);
 	section.SetBoolEx(L"ResetFileWatching", bResetFileWatching, false);
 	section.SetIntEx(L"AutoSaveOption", iAutoSaveOption, AutoSaveOption_Default);
 	section.SetIntEx(L"AutoSavePeriod", dwAutoSavePeriod, AutoSaveDefaultPeriod);
@@ -8132,9 +8131,9 @@ void InstallFileWatching(bool terminate) noexcept {
 		}
 	}
 
-	bRunningWatch = !terminate;
 	dwChangeNotifyTime = 0;
-	if (!terminate) {
+	bRunningWatch = !terminate;
+	if (bRunningWatch) {
 		// Install
 		SetTimer(nullptr, ID_WATCHTIMER, dwFileCheckInterval, WatchTimerProc);
 
@@ -8150,12 +8149,17 @@ void InstallFileWatching(bool terminate) noexcept {
 			memset(&fdCurFile, 0, sizeof(fdCurFile));
 		}
 
-		hChangeHandle = iFileWatchingMethod ? nullptr : FindFirstChangeNotification(tchDirectory, FALSE,
+		if ((iFileWatchingOption & FileWatchingOption_LogFile) == FileWatchingOption_None) {
+			hChangeHandle = FindFirstChangeNotification(tchDirectory, FALSE,
 						FILE_NOTIFY_CHANGE_FILE_NAME	| \
 						FILE_NOTIFY_CHANGE_DIR_NAME		| \
 						FILE_NOTIFY_CHANGE_ATTRIBUTES	| \
 						FILE_NOTIFY_CHANGE_SIZE			| \
 						FILE_NOTIFY_CHANGE_LAST_WRITE);
+			if (hChangeHandle == INVALID_HANDLE_VALUE) {
+				hChangeHandle = nullptr;
+			}
+		}
 	}
 }
 
@@ -8188,7 +8192,7 @@ static void CheckCurrentFileChangedOutsideApp() noexcept {
 			dwChangeNotifyTime = 0;
 			SendMessage(hwndMain, APPM_CHANGENOTIFY, 0, 0);
 		}
-	} else if (!iFileWatchingMethod) {
+	} else if (hChangeHandle) {
 		FindNextChangeNotification(hChangeHandle);
 	}
 }
@@ -8215,16 +8219,18 @@ void CALLBACK WatchTimerProc(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTim
 			dwChangeNotifyTime = 0;
 			SendMessage(hwndMain, APPM_CHANGENOTIFY, 0, 0);
 		}
-		// polling, not very efficient but useful for watching continuously updated file
-		else if (iFileWatchingMethod) {
-			if (dwChangeNotifyTime == 0) {
+		// Check Change Notification Handle
+		// TODO: notification not fired for continuously updated file
+		else if (hChangeHandle) {
+			if (WAIT_OBJECT_0 == WaitForSingleObject(hChangeHandle, 0)) {
 				CheckCurrentFileChangedOutsideApp();
 			}
 		}
-		// Check Change Notification Handle
-		// TODO: notification not fired for continuously updated file
-		else if (WAIT_OBJECT_0 == WaitForSingleObject(hChangeHandle, 0)) {
-			CheckCurrentFileChangedOutsideApp();
+		// polling, not very efficient but useful for watching continuously updated file
+		else {
+			if (dwChangeNotifyTime == 0) {
+				CheckCurrentFileChangedOutsideApp();
+			}
 		}
 	}
 }

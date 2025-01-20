@@ -20,10 +20,36 @@ struct IUnknown;
 
 #define NP2_AUTOC_CACHE_SORT_KEY	1
 #define NP2_AUTOC_USE_WORD_POINTER	0	// used for debug
-// scintilla/src/AutoComplete.h AutoComplete::maxItemLen
-#define NP2_AUTOC_MAX_WORD_LENGTH	(1024 - 3 - 1 - 16)	// SP + '(' + ')' + '\0'
-#define NP2_AUTOC_WORD_BUFFER_SIZE	1024
+#define NP2_AUTOC_MAX_WORD_LENGTH	(128 - 3 - 1)	// SP + '(' + ')' + '\0'
+#define NP2_AUTOC_WORD_BUFFER_SIZE	128
 #define NP2_AUTOC_INIT_BUFFER_SIZE	(4096)
+
+// optimization for small string
+template <size_t StackSize = 32>
+class CharBuffer {
+	char *ptr;
+	char buffer[StackSize];
+public:
+	explicit CharBuffer(size_t size) noexcept {
+		if (size <= StackSize) {
+			ptr = buffer;
+			memset(buffer, '\0', StackSize);
+		} else {
+			ptr = static_cast<char *>(NP2HeapAlloc(size));
+		}
+	}
+	char *data() noexcept {
+		return ptr;
+	}
+	char& operator[](size_t index) noexcept {
+		return ptr[index];
+	}
+	~CharBuffer() {
+		if (ptr != buffer) {
+			NP2HeapFree(ptr);
+		}
+	}
+};
 
 // memory buffer
 struct WordListBuffer {
@@ -682,9 +708,8 @@ enum {
 	GroovyKeywordIndex_Annotation = 7,
 	GroovyKeywordIndex_GroovyDoc = 9,
 	HTMLKeywordIndex_Tag = 0,
-	HTMLKeywordIndex_Attribute = 6,
-	HTMLKeywordIndex_EventHandler = 7,
-	HTMLKeywordIndex_Value = 8,
+	HTMLKeywordIndex_Attribute = 5,
+	HTMLKeywordIndex_Value = 6,
 	HaxeKeywordIndex_Preprocessor = 1,
 	HaxeKeywordIndex_CommentTag = 8,
 	InnoKeywordIndex_Directive = 4,
@@ -698,7 +723,7 @@ enum {
 	KotlinKeywordIndex_KDoc = 8,
 	NSISKeywordIndex_PredefinedVariable = 5,
 	PHPKeywordIndex_PredefinedVariable = 4,
-	PHPKeywordIndex_Phpdoc = 11,
+	PHPKeywordIndex_Phpdoc = 12,
 	PerlKeywordIndex_Variable = 2,
 	PowerShellKeywordIndex_PredefinedVariable = 4,
 	PythonKeywordIndex_Decorator = 7,
@@ -798,18 +823,9 @@ static void AutoC_AddDocWord(WordList &pWList, const uint32_t (&ignoredStyleMask
 	LPCSTR const pRoot = pWList.pWordStart;
 	const int iRootLen = pWList.iStartLen;
 
-	// optimization for small string
-	char onStack[64];
-	char *pFind;
-	if (iRootLen + 2 <= static_cast<int>(sizeof(onStack))) {
-		memset(onStack, 0, sizeof(onStack));
-		pFind = onStack;
-	} else {
-		pFind = static_cast<char *>(NP2HeapAlloc(iRootLen + 2));
-	}
-
+	CharBuffer pFind(iRootLen + 2);
 	pFind[0] = prefix;
-	memcpy(pFind + (prefix != '\0'), pRoot, iRootLen);
+	memcpy(pFind.data() + (prefix != '\0'), pRoot, iRootLen);
 	int findFlag = (bIgnoreCase ? SCFIND_NONE : SCFIND_MATCHCASE) | SCFIND_MATCH_TO_WORD_END;
 	if (IsDefaultWordChar(static_cast<uint8_t>(pRoot[0]))) {
 		findFlag |= SCFIND_WORDSTART;
@@ -817,7 +833,7 @@ static void AutoC_AddDocWord(WordList &pWList, const uint32_t (&ignoredStyleMask
 
 	const Sci_Position iCurrentPos = SciCall_GetCurrentPos() - iRootLen - (prefix ? 1 : 0);
 	const Sci_Position iDocLen = SciCall_GetLength();
-	Sci_TextToFindFull ft = { { 0, iDocLen }, pFind, { 0, 0 } };
+	Sci_TextToFindFull ft = { { 0, iDocLen }, pFind.data(), { 0, 0 } };
 
 	Sci_Position iPosFind = SciCall_FindTextFull(findFlag, &ft);
 	HANDLE timer = idleTaskTimer;
@@ -875,8 +891,7 @@ static void AutoC_AddDocWord(WordList &pWList, const uint32_t (&ignoredStyleMask
 
 			if (wordEnd - iPosFind >= iRootLen) {
 				char wordBuf[NP2_AUTOC_WORD_BUFFER_SIZE];
-				char *pWord = wordBuf + 16; // avoid overlap in memcpy()
-				bool bChanged = false;
+				char *pWord = wordBuf;
 				const Sci_TextRangeFull tr = { { iPosFind, min(iPosFind + NP2_AUTOC_MAX_WORD_LENGTH, wordEnd) }, pWord };
 				int wordLength = static_cast<int>(SciCall_GetTextRangeFull(&tr));
 
@@ -888,32 +903,24 @@ static void AutoC_AddDocWord(WordList &pWList, const uint32_t (&ignoredStyleMask
 						if (IsEscapeCharOrFormatSpecifier(before, static_cast<uint8_t>(pWord[0]), chPrev, style, false)) {
 							pWord++;
 							--wordLength;
-							bChanged = true;
 						}
 					}
 				}
 				if (prefix && prefix == pWord[0]) {
 					pWord++;
 					--wordLength;
-					bChanged = true;
 				}
 
 				//if (pLexCurrent->iLexer == SCLEX_PHPSCRIPT && wordLength >= 2 && pWord[0] == '$' && pWord[1] == '$') {
 				//	pWord++;
 				//	--wordLength;
-				//	bChanged = true;
 				//}
 				while (wordLength > 0 && (pWord[wordLength - 1] == '-' || pWord[wordLength - 1] == ':' || pWord[wordLength - 1] == '.')) {
 					--wordLength;
 					pWord[wordLength] = '\0';
 				}
-				if (bChanged) {
-					memcpy(wordBuf, pWord, wordLength + 1);
-					pWord = wordBuf;
-				}
 
-				bChanged = wordLength >= iRootLen && pWList.StartsWith(pWord);
-				if (bChanged && !(pWord[0] == ':' && pWord[1] != ':')) {
+				if (wordLength >= iRootLen && (pWord[0] != ':' || pWord[1] == ':') && pWList.StartsWith(pWord)) {
 					bool space = false;
 					if (!(pLexCurrent->iLexer == SCLEX_CPP && style == SCE_C_MACRO)) {
 						while (IsASpaceOrTab(SciCall_GetCharAt(wordEnd))) {
@@ -955,10 +962,6 @@ static void AutoC_AddDocWord(WordList &pWList, const uint32_t (&ignoredStyleMask
 
 		ft.chrg.cpMin = wordEnd;
 		iPosFind = SciCall_FindTextFull(findFlag, &ft);
-	}
-
-	if (pFind != onStack) {
-		NP2HeapFree(pFind);
 	}
 }
 
@@ -1017,7 +1020,6 @@ static void AutoC_AddKeyword(WordList &pWList, int iCurrentStyle) noexcept {
 	if (iLexer == SCLEX_PHPSCRIPT || iLexer == SCLEX_JAVASCRIPT || iLexer == SCLEX_MARKDOWN) {
 		pWList.AddListEx(lexHTML.pKeyWords->pszKeyWords[HTMLKeywordIndex_Tag]);
 		pWList.AddListEx(lexHTML.pKeyWords->pszKeyWords[HTMLKeywordIndex_Attribute]);
-		pWList.AddListEx(lexHTML.pKeyWords->pszKeyWords[HTMLKeywordIndex_EventHandler]);
 		pWList.AddListEx(lexHTML.pKeyWords->pszKeyWords[HTMLKeywordIndex_Value]);
 	}
 }
@@ -1593,19 +1595,10 @@ static bool EditCompleteWordCore(int iCondition, bool autoInsert) noexcept {
 		chPrev = chPrev2;
 	}
 
-	// optimization for small string
-	char onStack[64];
-	char *pRoot;
-	if (iCurrentPos - iStartWordPos + 1 < static_cast<Sci_Position>(sizeof(onStack))) {
-		memset(onStack, 0, sizeof(onStack));
-		pRoot = onStack;
-	} else {
-		pRoot = static_cast<char *>(NP2HeapAlloc(iCurrentPos - iStartWordPos + 1));
-	}
-
-	const Sci_TextRangeFull tr = { { iStartWordPos, iCurrentPos }, pRoot };
+	CharBuffer pRoot(iCurrentPos - iStartWordPos + 1);
+	const Sci_TextRangeFull tr = { { iStartWordPos, iCurrentPos }, pRoot.data() };
 	SciCall_GetTextRangeFull(&tr);
-	iRootLen = static_cast<int>(strlen(pRoot));
+	iRootLen = static_cast<int>(strlen(pRoot.data()));
 
 #if 0
 	StopWatch watch;
@@ -1616,7 +1609,7 @@ static bool EditCompleteWordCore(int iCondition, bool autoInsert) noexcept {
 		|| (pRoot[0] >= '0' && pRoot[0] <= '9'); // number
 	const bool bIgnoreCase = bIgnoreLexer || autoCompletionConfig.bIgnoreCase;
 	WordList pWList;
-	pWList.Init(pRoot, iRootLen, bIgnoreCase);
+	pWList.Init(pRoot.data(), iRootLen, bIgnoreCase);
 	bool bIgnoreDoc = false;
 	char prefix = '\0';
 
@@ -1733,7 +1726,7 @@ static bool EditCompleteWordCore(int iCondition, bool autoInsert) noexcept {
 		autoCompletionConfig.iPreviousItemCount = pWList.nWordCount;
 		char *pList = pWList.GetList();
 		SciCall_AutoCSetOptions(SC_AUTOCOMPLETE_FIXED_SIZE);
-		SciCall_AutoCSetOrder(SC_ORDER_PRESORTED); // pre-sorted
+		//SciCall_AutoCSetOrder(SC_ORDER_PRESORTED); // pre-sorted is default
 		SciCall_AutoCSetIgnoreCase(bIgnoreCase); // case sensitivity
 		SciCall_AutoCSetCaseInsensitiveBehaviour(bIgnoreCase);
 		//SciCall_AutoCSetSeparator('\n');
@@ -1747,9 +1740,6 @@ static bool EditCompleteWordCore(int iCondition, bool autoInsert) noexcept {
 		NP2HeapFree(pList);
 	}
 
-	if (pRoot != onStack) {
-		NP2HeapFree(pRoot);
-	}
 	pWList.Free();
 	return bShow;
 }
@@ -1923,17 +1913,6 @@ void EditAutoCloseBraceQuote(int ch, AutoInsertCharacter what) noexcept {
 	}
 }
 
-static inline bool IsHtmlVoidTag(const char *word) noexcept {
-	// same as htmlVoidTagList in scintilla/lexlib/DocUtils.h
-	const char *p = StrStrIA(
-		// void elements
-		" area base basefont br col command embed frame hr img input isindex keygen link meta param source track wbr "
-		// end tag can be omitted
-		"p "
-		, word);
-	return p != nullptr;
-}
-
 void EditAutoCloseXMLTag() noexcept {
 	char tchBuf[512];
 	const Sci_Position iCurPos = SciCall_GetCurrentPos();
@@ -2008,7 +1987,8 @@ void EditAutoCloseXMLTag() noexcept {
 			tchIns[cchIns] = ' ';
 			tchIns[cchIns + 1] = '\0';
 
-			if (cchIns > 2 && (pLexCurrent->iLexer == SCLEX_HTML || pLexCurrent->iLexer == SCLEX_PHPSCRIPT)) {
+			if (cchIns > 3 && (pLexCurrent->iLexer != SCLEX_XML)) {
+				// HTML void tag except <p>
 				if (IsHtmlVoidTag(tchIns + 1)) {
 					autoClosed = true;
 					cchIns = 0;

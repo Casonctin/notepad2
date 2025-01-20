@@ -5,6 +5,8 @@
 // Copyright 1998-2001 by Neil Hodgson <neilh@scintilla.org>
 // The License.txt file describes the conditions under which this software may be distributed.
 
+#include <cstdint>
+
 #include <stdexcept>
 #include <string_view>
 #include <vector>
@@ -60,7 +62,7 @@ Style::Style(const char *fontName_) noexcept :
 
 void Style::ResetDefault(const char *fontName_) noexcept {
 	font.reset();
-	new (this)Style(fontName_);
+	::new (this)Style(fontName_);
 }
 
 void Style::Copy(std::shared_ptr<Font> font_, const FontMeasurements &fm_) noexcept {

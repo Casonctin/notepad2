@@ -38,7 +38,7 @@
 #include "ILexer.h"
 
 #include "Debugging.h"
-//#include "VectorISA.h"
+#include "VectorISA.h"
 
 #include "CharacterSet.h"
 //#include "CharacterCategory.h"
@@ -142,7 +142,8 @@ CharacterExtracted::CharacterExtracted(const unsigned char *charBytes, size_t wi
 
 Document::Document(DocumentOption options) :
 	cb(!FlagSet(options, DocumentOption::StylesNone), FlagSet(options, DocumentOption::TextLarge)),
-	durationStyleOneUnit(1e-6) {
+	durationStyleOneUnit(1e-6),
+	decorations{DecorationListCreate(IsLarge())} {
 
 	perLineData[ldMarkers] = std::make_unique<LineMarkers>();
 	perLineData[ldLevels] = std::make_unique<LineLevels>();
@@ -150,8 +151,6 @@ Document::Document(DocumentOption options) :
 	perLineData[ldMargin] = std::make_unique<LineAnnotation>();
 	perLineData[ldAnnotation] = std::make_unique<LineAnnotation>();
 	perLineData[ldEOLAnnotation] = std::make_unique<LineAnnotation>();
-
-	decorations = DecorationListCreate(IsLarge());
 
 	cb.SetPerLine(this);
 	cb.SetUTF8Substance(CpUtf8 == dbcsCodePage);
@@ -829,7 +828,7 @@ bool Document::InGoodUTF8(Sci::Position pos, Sci::Position &start, Sci::Position
 // When lines are terminated with \r\n pairs which should be treated as one character.
 // When displaying DBCS text such as Japanese.
 // If moving, move the position in the indicated direction.
-Sci::Position Document::MovePositionOutsideChar(Sci::Position pos, Sci::Position moveDir, bool checkLineEnd) const noexcept {
+Sci::Position Document::MovePositionOutsideChar(Sci::Position pos, int moveDir, bool checkLineEnd) const noexcept {
 	//Platform::DebugPrintf("NoCRLF %d %d\n", pos, moveDir);
 	// If out of range, just return minimum/maximum value.
 	if (pos <= 0)
@@ -862,15 +861,9 @@ Sci::Position Document::MovePositionOutsideChar(Sci::Position pos, Sci::Position
 				// Else invalid UTF-8 so return position of isolated trail byte
 			}
 		} else {
-			// Anchor DBCS calculations at start of line because start of line can
-			// not be a DBCS trail byte.
-			const Sci::Position posStartLine = LineStartPosition(pos);
-			if (pos == posStartLine)
-				return pos;
-
 			// Step back until a non-lead-byte is found.
 			Sci::Position posCheck = pos;
-			while ((posCheck > posStartLine) && IsDBCSLeadByteNoExcept(cb.CharAt(posCheck - 1))) {
+			while ((posCheck > 0) && IsDBCSLeadByteNoExcept(cb.CharAt(posCheck - 1))) {
 				posCheck--;
 			}
 
@@ -899,7 +892,7 @@ Sci::Position Document::MovePositionOutsideChar(Sci::Position pos, Sci::Position
 // A \r\n pair is treated as two characters.
 Sci::Position Document::NextPosition(Sci::Position pos, int moveDir) const noexcept {
 	// If out of range, just return minimum/maximum value.
-	const int increment = (moveDir > 0) ? 1 : -1;
+	const int increment = moveDir;
 	if (pos + increment <= 0)
 		return 0;
 	if (pos + increment >= cb.Length())
@@ -947,16 +940,11 @@ Sci::Position Document::NextPosition(Sci::Position pos, int moveDir) const noexc
 				if (pos > cb.Length())
 					pos = cb.Length();
 			} else {
-				// Anchor DBCS calculations at start of line because start of line can
-				// not be a DBCS trail byte.
-				const Sci::Position posStartLine = LineStartPosition(pos);
 				// How to Go Backward in a DBCS String
 				// https://msdn.microsoft.com/en-us/library/cc194792.aspx
 				// DBCS-Enabled Programs vs. Non-DBCS-Enabled Programs
 				// https://msdn.microsoft.com/en-us/library/cc194790.aspx
-				if ((pos - 1) <= posStartLine) {
-					return pos - 1;
-				} else if (IsDBCSLeadByteNoExcept(cb.CharAt(pos - 1))) {
+				if (IsDBCSLeadByteNoExcept(cb.CharAt(pos - 1))) {
 					// Should actually be trail byte
 					if (IsDBCSDualByteAt(pos - 2)) {
 						return pos - 2;
@@ -967,7 +955,7 @@ Sci::Position Document::NextPosition(Sci::Position pos, int moveDir) const noexc
 				} else {
 					// Otherwise, step back until a non-lead-byte is found.
 					Sci::Position posTemp = pos - 1;
-					while (posStartLine <= --posTemp && IsDBCSLeadByteNoExcept(cb.CharAt(posTemp))) {
+					while (--posTemp >= 0 && IsDBCSLeadByteNoExcept(cb.CharAt(posTemp))) {
 					}
 					// Now posTemp+1 must point to the beginning of a character,
 					// so figure out whether we went back an even or an odd
@@ -2253,19 +2241,19 @@ Sci::Position Document::FindText(Sci::Position minPos, Sci::Position maxPos, con
 			}
 
 			const Sci::Position endSearch = (startPos <= endPos) ? endPos - lengthFind + 1 : endPos;
-			const unsigned char charStartSearch = searchData[0];
-			const unsigned char safeChar = (direction >= 0) ? forwardSafeChar : backwardSafeChar;
 			const Sci::Position skip = (direction >= 0) ? lengthFind : -1;
+			const unsigned char safeChar = (skip == 1) ? forwardSafeChar : backwardSafeChar;
+			const unsigned char charStartSearch = searchData[0];
 			if (direction < 0) {
 				pos = MovePositionOutsideChar(pos - lengthFind, -1, false);
 			}
 			//while (forward ? (pos < endSearch) : (pos >= endSearch)) {
 			while ((direction ^ (pos - endSearch)) < 0) {
-				const unsigned char leadByte = cbView.CharAt(pos);
+				const unsigned char leadByte = cbView[pos];
 				if (charStartSearch == leadByte) {
 					bool found = (pos + lengthFind) <= limitPos;
 					for (Sci::Position indexSearch = 1; (indexSearch < lengthFind) && found; indexSearch++) {
-						const unsigned char ch = cbView.CharAt(pos + indexSearch);
+						const unsigned char ch = cbView[pos + indexSearch];
 						found = ch == searchData[indexSearch];
 					}
 					if (found && MatchesWordOptions(word, wordStart, pos, lengthFind)) {
@@ -2301,7 +2289,7 @@ Sci::Position Document::FindText(Sci::Position minPos, Sci::Position maxPos, con
 				size_t indexSearch = 0;
 				bool characterMatches = true;
 				for (;;) {
-					const unsigned char leadByte = cbView.CharAt(posIndexDocument);
+					const unsigned char leadByte = cbView[posIndexDocument];
 					int widthChar = 1;
 					size_t lenFlat = 1;
 					if (UTF8IsAscii(leadByte)) {
@@ -2365,7 +2353,7 @@ Sci::Position Document::FindText(Sci::Position minPos, Sci::Position maxPos, con
 				size_t indexSearch = 0;
 				bool characterMatches = true;
 				for (;;) {
-					const unsigned char leadByte = cbView.CharAt(pos + indexDocument);
+					const unsigned char leadByte = cbView[pos + indexDocument];
 					const int widthChar = 1 + IsDBCSLeadByteNoExcept(leadByte);
 					if (!widthFirstCharacter) {
 						widthFirstCharacter = widthChar;
@@ -2379,7 +2367,7 @@ Sci::Position Document::FindText(Sci::Position minPos, Sci::Position maxPos, con
 					} else {
 						const char bytes[maxBytesCharacter + 1] {
 							static_cast<char>(leadByte),
-							cbView.CharAt(pos + indexDocument + 1)
+							cbView[pos + indexDocument + 1]
 						};
 						char folded[maxBytesCharacter * maxFoldingExpansion + 1];
 						lenFlat = pcf->Fold(folded, sizeof(folded), bytes, widthChar);
@@ -2420,7 +2408,7 @@ Sci::Position Document::FindText(Sci::Position minPos, Sci::Position maxPos, con
 			while ((direction ^ (pos - endSearch)) < 0) {
 				bool found = (pos + lengthFind) <= limitPos;
 				for (Sci::Position indexSearch = 0; (indexSearch < lengthFind) && found; indexSearch++) {
-					const char ch = cbView.CharAt(pos + indexSearch);
+					const char ch = cbView[pos + indexSearch];
 					const char chTest = searchData[indexSearch];
 					if (UTF8IsAscii(ch)) {
 						found = chTest == MakeLowerCase(ch);
@@ -2930,7 +2918,9 @@ Sci::Position Document::ExtendStyleRange(Sci::Position pos, int delta, bool sing
 	return pos;
 }
 
-static constexpr char BraceOpposite(char ch) noexcept {
+namespace {
+
+constexpr char BraceOpposite(char ch) noexcept {
 	if (AnyOf<'(', ')'>(ch)) {
 		return '(' + ')' - ch;
 	}
@@ -2943,35 +2933,231 @@ static constexpr char BraceOpposite(char ch) noexcept {
 	return '\0';
 }
 
+}
+
 // TODO: should be able to extend styled region to find matching brace
 Sci::Position Document::BraceMatch(Sci::Position position, Sci::Position /*maxReStyle*/, Sci::Position startPos, bool useStartPos) const noexcept {
 	const unsigned char chBrace = CharAt(position);
 	const unsigned char chSeek = BraceOpposite(chBrace);
-	if (chSeek == '\0')
+	if (chSeek == '\0') {
 		return -1;
+	}
 	const int styBrace = StyleIndexAt(position);
 	const int direction = (chBrace < chSeek) ? 1 : -1;
-	const unsigned char safeChar = (direction >= 0) ? asciiForwardSafeChar : asciiBackwardSafeChar;
-	position = useStartPos ? startPos : NextPosition(position, direction);
+	const unsigned char safeChar = asciiBackwardSafeChar;
+	position = useStartPos ? startPos : position + direction;
+	const Sci::Position endStylePos = GetEndStyled();
 	const Sci::Position length = LengthNoExcept();
+	const SplitView cbView = cb.AllView();
 	int depth = 1;
+	if (IsValidIndex(position + 64*direction, length)) {
+#if NP2_USE_AVX2
+		const __m256i mmBrace = mm256_set1_epi8(chBrace);
+		const __m256i mmSeek = mm256_set1_epi8(chSeek);
+		if (direction >= 0) {
+			const Sci::Position maxPos = length - 2*sizeof(__m256i);
+			const Sci::Position segmentEndPos = std::min<Sci::Position>(maxPos, cbView.length1 - 1);
+			do {
+				const Sci::Position segmentLength = cbView.length1;
+				const bool scanFirst = IsValidIndex(position, segmentLength);
+				const Sci::Position endPos = scanFirst ? segmentEndPos : maxPos;
+				const char * const segment = scanFirst ? cbView.segment1 : cbView.segment2;
+				const __m256i *ptr = reinterpret_cast<const __m256i *>(segment + position);
+				Sci::Position index = position;
+				uint64_t mask = 0;
+				do {
+					const __m256i chunk1 = _mm256_loadu_si256(ptr);
+					const __m256i chunk2 = _mm256_loadu_si256(ptr + 1);
+					mask = mm256_movemask_epi8(_mm256_or_si256(_mm256_cmpeq_epi8(chunk1, mmBrace), _mm256_cmpeq_epi8(chunk1, mmSeek)));
+					mask |= static_cast<uint64_t>(mm256_movemask_epi8(_mm256_or_si256(_mm256_cmpeq_epi8(chunk2, mmBrace), _mm256_cmpeq_epi8(chunk2, mmSeek)))) << sizeof(__m256i);
+					if (mask != 0) {
+						index = position;
+						position += 2*sizeof(__m256i);
+						break;
+					}
+					ptr += 2;
+					position += 2*sizeof(__m256i);
+				} while (position <= endPos);
+				if (position > segmentLength && index < segmentLength) {
+					position = segmentLength;
+					const uint32_t offset = static_cast<uint32_t>(position - index);
+					mask = bit_zero_high_u64(mask, offset);
+				}
+				while (mask) {
+					const uint64_t trailing = np2::ctz(mask);
+					index += trailing;
+					mask >>= trailing;
+					if ((index > endStylePos || StyleIndexAt(index) == styBrace) &&
+						(chBrace <= safeChar || index == MovePositionOutsideChar(index, 1, false))) {
+						const unsigned char chAtPos = segment[index];
+						depth += (chAtPos == chBrace) ? 1 : -1;
+						if (depth == 0) {
+							return index;
+						}
+					}
+					index++;
+					mask >>= 1;
+				}
+			} while (position <= maxPos);
+		}
+		else {
+			constexpr Sci::Position minPos = 2*sizeof(__m256i) - 1;
+			const Sci::Position segmentEndPos = std::max<Sci::Position>(minPos, cbView.length1);
+			do {
+				const Sci::Position segmentLength = cbView.length1;
+				const bool scanFirst = IsValidIndex(position, segmentLength);
+				const Sci::Position endPos = scanFirst ? minPos : segmentEndPos;
+				const char * const segment = scanFirst ? cbView.segment1 : cbView.segment2;
+				const __m256i *ptr = reinterpret_cast<const __m256i *>(segment + position + 1);
+				Sci::Position index = position;
+				uint64_t mask = 0;
+				do {
+					const __m256i chunk1 = _mm256_loadu_si256(ptr - 1);
+					const __m256i chunk2 = _mm256_loadu_si256(ptr - 2);
+					mask = mm256_movemask_epi8(_mm256_or_si256(_mm256_cmpeq_epi8(chunk2, mmBrace), _mm256_cmpeq_epi8(chunk2, mmSeek)));
+					mask |= static_cast<uint64_t>(mm256_movemask_epi8(_mm256_or_si256(_mm256_cmpeq_epi8(chunk1, mmBrace), _mm256_cmpeq_epi8(chunk1, mmSeek)))) << sizeof(__m256i);
+					if (mask != 0) {
+						index = position;
+						position -= 2*sizeof(__m256i);
+						break;
+					}
+					ptr -= 2;
+					position -= 2*sizeof(__m256i);
+				} while (position >= endPos);
+				if (index >= segmentLength && position < segmentLength) {
+					position = segmentLength - 1;
+					const uint32_t offset = 63 & static_cast<uint32_t>(position - index);
+					mask = (mask >> offset) << offset;
+				}
+				while (mask) {
+					const uint64_t leading = np2::clz(mask);
+					index -= leading;
+					mask <<= leading;
+					if ((index > endStylePos || StyleIndexAt(index) == styBrace) &&
+						(chBrace <= safeChar || index == MovePositionOutsideChar(index, -1, false))) {
+						const unsigned char chAtPos = segment[index];
+						depth += (chAtPos == chBrace) ? 1 : -1;
+						if (depth == 0) {
+							return index;
+						}
+					}
+					index--;
+					mask <<= 1;
+				}
+			} while (position >= minPos);
+		}
+		// end NP2_USE_AVX2
+#elif NP2_USE_SSE2
+		const __m128i mmBrace = _mm_set1_epi8(chBrace);
+		const __m128i mmSeek = _mm_set1_epi8(chSeek);
+		if (direction >= 0) {
+			const Sci::Position maxPos = length - 2*sizeof(__m128i);
+			const Sci::Position segmentEndPos = std::min<Sci::Position>(maxPos, cbView.length1 - 1);
+			do {
+				const Sci::Position segmentLength = cbView.length1;
+				const bool scanFirst = IsValidIndex(position, segmentLength);
+				const Sci::Position endPos = scanFirst ? segmentEndPos : maxPos;
+				const char * const segment = scanFirst ? cbView.segment1 : cbView.segment2;
+				const __m128i *ptr = reinterpret_cast<const __m128i *>(segment + position);
+				Sci::Position index = position;
+				uint32_t mask = 0;
+				do {
+					const __m128i chunk1 = _mm_loadu_si128(ptr);
+					const __m128i chunk2 = _mm_loadu_si128(ptr + 1);
+					mask = mm_movemask_epi8(_mm_or_si128(_mm_cmpeq_epi8(chunk1, mmBrace), _mm_cmpeq_epi8(chunk1, mmSeek)));
+					mask |= mm_movemask_epi8(_mm_or_si128(_mm_cmpeq_epi8(chunk2, mmBrace), _mm_cmpeq_epi8(chunk2, mmSeek))) << sizeof(__m128i);
+					if (mask != 0) {
+						index = position;
+						position += 2*sizeof(__m128i);
+						break;
+					}
+					ptr += 2;
+					position += 2*sizeof(__m128i);
+				} while (position <= endPos);
+				if (position > segmentLength && index < segmentLength) {
+					position = segmentLength;
+					const uint32_t offset = static_cast<uint32_t>(position - index);
+					mask = bit_zero_high_u32(mask, offset);
+				}
+				while (mask) {
+					const uint32_t trailing = np2::ctz(mask);
+					index += trailing;
+					mask >>= trailing;
+					if ((index > endStylePos || StyleIndexAt(index) == styBrace) &&
+						(chBrace <= safeChar || index == MovePositionOutsideChar(index, 1, false))) {
+						const unsigned char chAtPos = segment[index];
+						depth += (chAtPos == chBrace) ? 1 : -1;
+						if (depth == 0) {
+							return index;
+						}
+					}
+					index++;
+					mask >>= 1;
+				}
+			} while (position <= maxPos);
+		}
+		else {
+			constexpr Sci::Position minPos = 2*sizeof(__m128i) - 1;
+			const Sci::Position segmentEndPos = std::max<Sci::Position>(minPos, cbView.length1);
+			do {
+				const Sci::Position segmentLength = cbView.length1;
+				const bool scanFirst = IsValidIndex(position, segmentLength);
+				const Sci::Position endPos = scanFirst ? minPos : segmentEndPos;
+				const char * const segment = scanFirst ? cbView.segment1 : cbView.segment2;
+				const __m128i *ptr = reinterpret_cast<const __m128i *>(segment + position + 1);
+				Sci::Position index = position;
+				uint32_t mask = 0;
+				do {
+					const __m128i chunk1 = _mm_loadu_si128(ptr - 1);
+					const __m128i chunk2 = _mm_loadu_si128(ptr - 2);
+					mask = mm_movemask_epi8(_mm_or_si128(_mm_cmpeq_epi8(chunk2, mmBrace), _mm_cmpeq_epi8(chunk2, mmSeek)));
+					mask |= mm_movemask_epi8(_mm_or_si128(_mm_cmpeq_epi8(chunk1, mmBrace), _mm_cmpeq_epi8(chunk1, mmSeek))) << sizeof(__m128i);
+					if (mask != 0) {
+						index = position;
+						position -= 2*sizeof(__m128i);
+						break;
+					}
+					ptr -= 2;
+					position -= 2*sizeof(__m128i);
+				} while (position >= endPos);
+				if (index >= segmentLength && position < segmentLength) {
+					position = segmentLength - 1;
+					const uint32_t offset = 31 & static_cast<uint32_t>(position - index);
+					mask = (mask >> offset) << offset;
+				}
+				while (mask) {
+					const uint32_t leading = np2::clz(mask);
+					index -= leading;
+					mask <<= leading;
+					if ((index > endStylePos || StyleIndexAt(index) == styBrace) &&
+						(chBrace <= safeChar || index == MovePositionOutsideChar(index, -1, false))) {
+						const unsigned char chAtPos = segment[index];
+						depth += (chAtPos == chBrace) ? 1 : -1;
+						if (depth == 0) {
+							return index;
+						}
+					}
+					index--;
+					mask <<= 1;
+				}
+			} while (position >= minPos);
+		}
+		// end NP2_USE_SSE2
+#endif
+	}
+
 	while (IsValidIndex(position, length)) {
-		const unsigned char chAtPos = CharAt(position);
+		const unsigned char chAtPos = cbView[position];
 		if (chAtPos == chBrace || chAtPos == chSeek) {
-			if ((position > GetEndStyled()) || (StyleIndexAt(position) == styBrace)) {
+			if ((position > endStylePos || StyleIndexAt(position) == styBrace) &&
+				(chAtPos <= safeChar || position == MovePositionOutsideChar(position, direction, false))) {
 				depth += (chAtPos == chBrace) ? 1 : -1;
 				if (depth == 0) {
 					return position;
 				}
 			}
-			position += direction;
-		} else if (chAtPos <= safeChar) {
-			position += direction;
-		} else {
-			if (!NextCharacter(position, direction)) {
-				break;
-			}
 		}
+		position += direction;
 	}
 	return -1;
 }
@@ -2993,11 +3179,12 @@ public:
 			return '\0';
 	}
 
-	Sci::Position MovePositionOutsideChar(Sci::Position pos, Sci::Position moveDir) const noexcept override {
+	Sci::Position MovePositionOutsideChar(Sci::Position pos, int moveDir) const noexcept override {
 		return pdoc->MovePositionOutsideChar(pos, moveDir, false);
 	}
 };
 
+class RESearchRange;
 /**
  * Implementation of RegexSearchBase for the default built-in regular expression engine
  */
@@ -3010,7 +3197,7 @@ public:
 	const char *SubstituteByPosition(const Document *doc, const char *text, Sci::Position *length) override;
 
 #if defined(BOOST_REGEX_STANDALONE) || !defined(NO_CXX11_REGEX)
-	Sci::Position CxxRegexFindText(const Document *doc, Sci::Position minPos, Sci::Position maxPos, const char *pattern, FindOption flags, Sci::Position *length);
+	Sci::Position CxxRegexFindText(const Document *doc, const RESearchRange &resr, const char *pattern, FindOption flags, Sci::Position *length);
 #endif
 
 private:
@@ -3033,14 +3220,13 @@ private:
 */
 class RESearchRange {
 public:
-	const Document *doc;
 	int increment;
 	Sci::Position startPos;
 	Sci::Position endPos;
 	Sci::Line lineRangeStart;
 	Sci::Line lineRangeEnd;
 	Sci::Line lineRangeBreak;
-	RESearchRange(const Document *doc_, Sci::Position minPos, Sci::Position maxPos) noexcept : doc(doc_) {
+	RESearchRange(const Document *doc, Sci::Position minPos, Sci::Position maxPos) noexcept {
 		increment = (minPos <= maxPos) ? 1 : -1;
 
 		// Range endpoints should not be inside DBCS characters or between a CR and LF,
@@ -3229,8 +3415,7 @@ bool MatchOnLines(const Document *doc, const Regex &regexp, const RESearchRange 
 	return matched;
 }
 
-Sci::Position BuiltinRegex::CxxRegexFindText(const Document *doc, Sci::Position minPos, Sci::Position maxPos, const char *pattern, FindOption flags, Sci::Position *length) {
-	const RESearchRange resr(doc, minPos, maxPos);
+Sci::Position BuiltinRegex::CxxRegexFindText(const Document *doc, const RESearchRange &resr, const char *pattern, FindOption flags, Sci::Position *length) {
 	try {
 		boost::wregex::flag_type flagsRe = boost::wregex::ECMAScript;
 		if (!FlagSet(flags, FindOption::MatchCase)) {
@@ -3353,8 +3538,7 @@ labelMatched:
 	return matched;
 }
 
-Sci::Position BuiltinRegex::CxxRegexFindText(const Document *doc, Sci::Position minPos, Sci::Position maxPos, const char *pattern, FindOption flags, Sci::Position *length) {
-	const RESearchRange resr(doc, minPos, maxPos);
+Sci::Position BuiltinRegex::CxxRegexFindText(const Document *doc, const RESearchRange &resr, const char *pattern, FindOption flags, Sci::Position *length) {
 	try {
 		//const ElapsedPeriod ep;
 		std::wregex::flag_type flagsRe = std::wregex::ECMAScript;
@@ -3407,13 +3591,13 @@ Sci::Position BuiltinRegex::CxxRegexFindText(const Document *doc, Sci::Position 
 #endif // BOOST_REGEX_STANDALONE || !NO_CXX11_REGEX
 
 Sci::Position BuiltinRegex::FindText(const Document *doc, Sci::Position minPos, Sci::Position maxPos, const char *pattern, FindOption flags, Sci::Position *length) {
+	const RESearchRange resr(doc, minPos, maxPos);
 #if defined(BOOST_REGEX_STANDALONE) || !defined(NO_CXX11_REGEX)
 	if (FlagSet(flags, FindOption::Cxx11RegEx)) {
-		return CxxRegexFindText(doc, minPos, maxPos, pattern, flags, length);
+		return CxxRegexFindText(doc, resr, pattern, flags, length);
 	}
 #endif
 
-	const RESearchRange resr(doc, minPos, maxPos);
 	const size_t patternLen = *length;
 	const char *errmsg = search.Compile(pattern, patternLen, flags);
 	if (errmsg) {

@@ -116,6 +116,13 @@ constexpr bool IsSchemeNameChar(int ch) noexcept {
 	return IsAlphaNumeric(ch) || ch == '+' || ch == '-' || ch == '.';
 }
 
+inline bool IsHtmlVoidTag(const char *tag) noexcept {
+	return nullptr != StrStrIA(
+	// void elements, should keep sync with EditLexers/stlHTML.cpp
+	" area base basefont br col command embed frame hr img input isindex keygen link meta p param source track wbr "
+	, tag);
+}
+
 constexpr int ToUpperA(int ch) noexcept {
 	return (ch >= 'a' && ch <= 'z') ? (ch - 'a' + 'A') : ch;
 }

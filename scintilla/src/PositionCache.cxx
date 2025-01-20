@@ -213,7 +213,8 @@ void LineLayout::AddLineStart(Sci::Position start) {
 		const int newMaxLines = lines + 20;
 		std::unique_ptr<int[]> newLineStarts = std::make_unique<int[]>(newMaxLines);
 		if (lenLineStarts) {
-			std::copy(lineStarts.get(), lineStarts.get() + lenLineStarts, newLineStarts.get());
+			//std::copy_n(lineStarts.get(), lenLineStarts, newLineStarts.get());
+			memcpy(newLineStarts.get(), lineStarts.get(), lenLineStarts*sizeof(int));
 		}
 		lineStarts = std::move(newLineStarts);
 		lenLineStarts = newMaxLines;
@@ -799,7 +800,7 @@ LineLayout *LineLayoutCache::Retrieve(Sci::Line lineNumber, Sci::Line lineCaret,
 			//printf("USE line=%zd/%zd, caret=%zd/%zd top=%zd, pos=%zu, clock=%d\n",
 			//	lineNumber, ret->lineNumber, lineCaret, lastCaretSlot, topLine, pos, styleClock_);
 			ret->Free();
-			new (ret) LineLayout(lineNumber, maxChars);
+			::new (ret) LineLayout(lineNumber, maxChars);
 		} else {
 			//printf("HIT line=%zd, caret=%zd/%zd top=%zd, pos=%zu, clock=%d, validity=%d\n",
 			//	lineNumber, lineCaret, lastCaretSlot, topLine, pos, styleClock_, ret->validity);

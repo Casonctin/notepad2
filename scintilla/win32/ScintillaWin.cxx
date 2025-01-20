@@ -564,7 +564,7 @@ class ScintillaWin final :
 	void NotifyFocus(bool focus) override;
 	void SetCtrlID(int identifier) noexcept override;
 	int GetCtrlID() const noexcept override;
-	void NotifyParent(NotificationData scn) noexcept override;
+	void NotifyParent(NotificationData &scn) const noexcept override;
 	void NotifyDoubleClick(Point pt, KeyMod modifiers) override;
 	std::unique_ptr<CaseFolder> CaseFolderForEncoding() override;
 	std::string CaseMapString(const std::string &s, CaseMapping caseMapping) const override;
@@ -2762,11 +2762,11 @@ int ScintillaWin::GetCtrlID() const noexcept {
 	return ::GetDlgCtrlID(MainHWND());
 }
 
-void ScintillaWin::NotifyParent(NotificationData scn) noexcept {
+void ScintillaWin::NotifyParent(NotificationData &scn) const noexcept {
 	scn.nmhdr.hwndFrom = MainHWND();
 	scn.nmhdr.idFrom = GetCtrlID();
 	::SendMessage(::GetParent(MainHWND()), WM_NOTIFY,
-		GetCtrlID(), AsInteger<LPARAM>(&scn));
+		scn.nmhdr.idFrom, AsInteger<LPARAM>(&scn));
 }
 
 void ScintillaWin::NotifyDoubleClick(Point pt, KeyMod modifiers) {
@@ -2778,6 +2778,32 @@ void ScintillaWin::NotifyDoubleClick(Point pt, KeyMod modifiers) {
 		WM_LBUTTONDBLCLK,
 		FlagSet(modifiers, KeyMod::Shift) ? MK_SHIFT : 0,
 		MAKELPARAM(point.x, point.y));
+}
+
+void Editor::BeginBatchUpdate() noexcept {
+	++batchUpdateDepth;
+	if (batchUpdateDepth == 1) {
+		batchUpdateState.modEventMask = modEventMask;
+		modEventMask = ModificationFlags::None;
+		batchUpdateState.actions = pdoc->UndoActions();
+		batchUpdateState.lines = pdoc->LinesTotal();
+		::SendMessage(HwndFromWindow(wMain), WM_SETREDRAW, FALSE, 0);
+	}
+}
+
+void Editor::EndBatchUpdate() noexcept {
+	--batchUpdateDepth;
+	if (batchUpdateDepth == 0) {
+		modEventMask = batchUpdateState.modEventMask;
+		::SendMessage(HwndFromWindow(wMain), WM_SETREDRAW, TRUE, 0);
+		if (batchUpdateState.actions != pdoc->UndoActions()) {
+			NotificationData scn = {};
+			scn.nmhdr.code = Notification::Modified;
+			scn.linesAdded = pdoc->LinesTotal() - batchUpdateState.lines;
+			NotifyParent(scn);
+			::InvalidateRect(HwndFromWindow(wMain), nullptr, TRUE);
+		}
+	}
 }
 
 namespace {

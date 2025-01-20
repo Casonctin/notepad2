@@ -329,7 +329,7 @@ public:
 	uint8_t asciiBackwardSafeChar = 0xff;
 	ActionDuration durationStyleOneUnit;
 
-	std::unique_ptr<IDecorationList> decorations;
+	const std::unique_ptr<IDecorationList> decorations;
 
 	explicit Document(Scintilla::DocumentOption options);
 	// Deleted so Document objects can not be copied.
@@ -377,7 +377,7 @@ public:
 	bool IsCrLf(Sci::Position pos) const noexcept;
 	int LenChar(Sci::Position pos, bool *invalid = nullptr) const noexcept;
 	bool InGoodUTF8(Sci::Position pos, Sci::Position &start, Sci::Position &end) const noexcept;
-	Sci::Position MovePositionOutsideChar(Sci::Position pos, Sci::Position moveDir, bool checkLineEnd = true) const noexcept;
+	Sci::Position MovePositionOutsideChar(Sci::Position pos, int moveDir, bool checkLineEnd = true) const noexcept;
 	Sci::Position NextPosition(Sci::Position pos, int moveDir) const noexcept;
 	bool NextCharacter(Sci::Position &pos, int moveDir) const noexcept;	// Returns true if pos changed
 	CharacterExtracted CharacterAfter(Sci::Position position) const noexcept;
@@ -494,9 +494,6 @@ public:
 	const char *RangePointer(Sci::Position position, Sci::Position rangeLength) noexcept {
 		return cb.RangePointer(position, rangeLength);
 	}
-	const char *StyleRangePointer(Sci::Position position, Sci::Position rangeLength) noexcept {
-		return cb.StyleRangePointer(position, rangeLength);
-	}
 	Sci::Position GapPosition() const noexcept {
 		return cb.GapPosition();
 	}
@@ -544,6 +541,9 @@ public:
 	}
 	void GetStyleRange(unsigned char *buffer, Sci::Position position, Sci::Position lengthRetrieve) const noexcept {
 		cb.GetStyleRange(buffer, position, lengthRetrieve);
+	}
+	int CheckRange(const char *chars, const char *styles, Sci::Position position, Sci::Position rangeLength) const noexcept {
+		return cb.CheckRange(chars, styles, position, rangeLength);
 	}
 	MarkerMask GetMark(Sci::Line line, bool includeChangeHistory) const noexcept;
 	Sci::Line MarkerNext(Sci::Line lineStart, MarkerMask mask) const noexcept;

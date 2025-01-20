@@ -22,9 +22,14 @@ LexerKeywordIndexList = {}
 # X11 and SVG color names
 ColorNameList = set()
 CSharpKeywordMap = {}
+GroovyKeyword = []
+HtmlVoidTagList = """area base basefont br col command embed frame hr
+img input isindex keygen link meta param source track wbr
+p""".split()
 JavaKeywordMap = {}
 JavaScriptKeywordMap = {}
-GroovyKeyword = []
+SGMLKeyword = []
+VBScriptKeyword = []
 
 def RemoveDuplicateKeyword(keywordMap, orderedKeys):
 	unique = set()
@@ -95,6 +100,9 @@ def BuildKeywordContent(rid, lexer, keywordList, keywordCount=16):
 			length = len(lines) + sum(len(line) for line in lines)
 			if length >= 0xffff:
 				print(rid, comment, 'string exceeds 64 KiB:', length)
+			if attr & KeywordAttr.PrefixSpace:
+				attr &= ~KeywordAttr.PrefixSpace
+				lines[0] = ' ' + lines[0]
 			output.extend('"' + line + ' "' for line in lines)
 		else:
 			output.append('nullptr')
@@ -170,6 +178,14 @@ def UpdateAutoCompletionCache(path):
 	cache = BuildAutoCompletionCache()
 	Regenerate(path, '//Cache', cache)
 
+
+def sub_extract(pattern, doc, flags=0):
+	lines = []
+	def extract(m):
+		lines.append(m.group(0))
+		return ''
+	doc = re.sub(pattern, lambda m: extract(m), doc, flags=flags)
+	return doc, '\n'.join(lines)
 
 def split_api_section(doc, comment, commentKind=0):
 	if commentKind == 0:
@@ -1277,16 +1293,24 @@ def parse_haxe_api_file(path):
 	]
 
 def parse_html_api_file(path):
+	doc = read_file(path)
+	doc = re.sub(r'<!--.*?-->', '', doc, flags=re.DOTALL | re.MULTILINE)
+	doc, text = sub_extract(r'".*?"', doc, flags=re.DOTALL | re.MULTILINE)
+	values = re.findall(r'[\w:\-/]+', text)
+	doc, text = sub_extract(r'<!.*?>', doc, flags=re.DOTALL | re.MULTILINE)
+	doc, text = sub_extract(r'<[?/]?[\w+:\-]+>?', doc)
+	keywords = re.findall(r'[\w+:\-]+', text)
+	attributes = re.findall(r'[\w:\-]+', doc)
+	attributes += ['^aria-', '^data-']
+	values = set(values) - set(keywords) - set(attributes)
 	return [
-		('tag', [], KeywordAttr.Special),
-		('JavaScript', [], KeywordAttr.NoAutoComp),
-		('VBScript', [], KeywordAttr.MakeLower | KeywordAttr.NoAutoComp),
-		('Python', [], KeywordAttr.Default),
-		('PHP', [], KeywordAttr.Default),
-		('SGML', [], KeywordAttr.Default),
-		('attribute', [], KeywordAttr.Special),
-		('event handler', [], KeywordAttr.Special),
-		('value', [], KeywordAttr.NoLexer | KeywordAttr.Special),
+		('tag', keywords, KeywordAttr.Special),
+		('void tag', HtmlVoidTagList, KeywordAttr.NoAutoComp | KeywordAttr.PrefixSpace),
+		('JavaScript', JavaScriptKeywordMap['keywords'], KeywordAttr.NoAutoComp),
+		('VBScript', VBScriptKeyword, KeywordAttr.MakeLower | KeywordAttr.NoAutoComp),
+		('SGML', SGMLKeyword, KeywordAttr.Default),
+		('attribute', attributes, KeywordAttr.Special),
+		('value', values, KeywordAttr.NoLexer | KeywordAttr.Special),
 	]
 
 def parse_inno_setup_api_file(path):
@@ -1894,6 +1918,7 @@ def parse_php_api_file(path):
 		('constant', keywordMap['constant'], KeywordAttr.NoLexer),
 		('function', keywordMap['function'], KeywordAttr.NoLexer),
 		('misc', keywordMap['misc'], KeywordAttr.NoLexer),
+		('void tag', HtmlVoidTagList, KeywordAttr.NoAutoComp | KeywordAttr.PrefixSpace),
 		('JavaScript', JavaScriptKeywordMap['keywords'], KeywordAttr.NoAutoComp),
 		('phpdoc', keywordMap['phpdoc'], KeywordAttr.NoLexer | KeywordAttr.NoAutoComp | KeywordAttr.Special),
 	]
@@ -2597,6 +2622,8 @@ def parse_visual_basic_api_file(pathList):
 		'vba keywords',
 		'misc',
 	])
+	if not items:
+		VBScriptKeyword.extend(keywordMap['keywords'])
 	return [
 		('keywords', keywordMap['keywords'], KeywordAttr.MakeLower),
 		('type keyword', keywordMap['types'], KeywordAttr.MakeLower),
@@ -2732,16 +2759,23 @@ def parse_winhex_api_file(path):
 	]
 
 def parse_xml_api_file(path):
+	doc = read_file(path)
+	doc = re.sub(r'<!--.*?-->', '', doc, flags=re.DOTALL | re.MULTILINE)
+	doc, text = sub_extract(r'".*?"', doc, flags=re.DOTALL | re.MULTILINE)
+	values = re.findall(r'[\w:\-/]+', text)
+	doc, text = sub_extract(r'<!.*?>', doc, flags=re.DOTALL | re.MULTILINE)
+	keywords = re.findall(r'\w+', text)
+	attributes = re.findall(r'[\w:\-]+', doc)
+	values = set(values) - set(attributes)
+	SGMLKeyword.extend(keywords)
 	return [
 		('tag', [], KeywordAttr.Default),
+		('void tag', [], KeywordAttr.Default),
 		('JavaScript', [], KeywordAttr.Default),
 		('VBScript', [], KeywordAttr.Default),
-		('Python', [], KeywordAttr.Default),
-		('PHP', [], KeywordAttr.Default),
-		('SGML', [], KeywordAttr.Default),
-		('attribute', [], KeywordAttr.NoLexer),
-		('event handler', [], KeywordAttr.Default),
-		('value', [], KeywordAttr.NoLexer),
+		('SGML', keywords, KeywordAttr.Default),
+		('attribute', attributes, KeywordAttr.NoLexer),
+		('value', values, KeywordAttr.NoLexer),
 	]
 
 def parse_yaml_api_file(path):

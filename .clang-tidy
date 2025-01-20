@@ -24,6 +24,7 @@ Checks: [
     -modernize-macro-to-enum,
     -modernize-redundant-void-arg,
     -modernize-use-designated-initializers,
+    -modernize-use-integer-sign-comparison,
     -modernize-use-nodiscard,
     -modernize-use-std-numbers,
     -modernize-use-trailing-return-type,
@@ -48,10 +49,12 @@ Checks: [
     # -modernize-use-auto,
     # -modernize-use-default-member-init,
     # -readability-braces-around-statements,
+    # -readability-container-contains,
     # -readability-else-after-return,
     # -readability-named-parameter,
     # -readability-simplify-boolean-expr,
     # -bugprone-reserved-identifier,
+    # -bugprone-standalone-empty,
     # -misc-const-correctness,
     ]
 
