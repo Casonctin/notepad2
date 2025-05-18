@@ -49,9 +49,9 @@ def conversionSets():
 	complexes = []
 	symmetrics = []
 	for ch in range(UnicodeCharacterCount):
-		if ch >= 0xd800 and ch <= 0xDBFF:
+		if 0xd800 <= ch <= 0xDBFF:
 			continue
-		if ch >= 0xdc00 and ch <= 0xDFFF:
+		if 0xdc00 <= ch <= 0xDFFF:
 			continue
 		uch = chr(ch)
 
@@ -119,10 +119,13 @@ def updateCaseConvert():
 	rangeGroups, nonRanges = groupRanges(symmetrics)
 
 	print(len(rangeGroups), "ranges")
-	rangeLines = ["%d,%d,%d,%d," % x for x in rangeGroups]
+	rangeLines = []
+	for lower, upper, length, pitch in rangeGroups:
+		assert length < 256 and pitch < 256
+		rangeLines.append(f"0x{lower:04X}'{length:02X},0x{upper:04X}'{pitch:02X},")
 
 	print(len(nonRanges), "non ranges")
-	nonRangeLines = ["%d,%d," % x for x in nonRanges]
+	nonRangeLines = [f"{lower},{upper}," for lower, upper in nonRanges]
 
 	print(len(symmetrics), "symmetric")
 

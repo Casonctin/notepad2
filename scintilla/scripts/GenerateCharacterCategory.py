@@ -79,17 +79,18 @@ CategoryClassifyMap = flattenPropertyMap(CharClassifyMap)
 # https://en.wikipedia.org/wiki/Private_Use_Areas
 # Category: Other, private use (Co)
 def isPrivateChar(c):
-	return (c >= 0xE000 and c <= 0xF8FF) \
-		or (c >= 0xF0000 and c <= 0xFFFFD) \
-		or (c >= 0x100000 and c <= 0x10FFFD)
+	return (0xE000 <= c <= 0xF8FF) \
+		or (0xF0000 <= c <= 0xFFFFD) \
+		or (0x100000 <= c <= 0x10FFFD)
 
 # https://en.wikipedia.org/wiki/Unicode_block
 # https://en.wikipedia.org/wiki/Plane_(Unicode)#Basic_Multilingual_Plane
 # https://en.wikipedia.org/wiki/CJK_Unified_Ideographs
 # https://en.wikipedia.org/wiki/Katakana
 # https://en.wikipedia.org/wiki/Hangul
-# Chapter 18 East Asia https://www.unicode.org/versions/Unicode15.0.0/UnicodeStandard-15.0.pdf
+# Chapter 18 East Asia https://www.unicode.org/versions/Unicode16.0.0/UnicodeStandard-16.0.pdf
 # Unicode Han Database (Unihan) https://unicode.org/reports/tr38/#BlockListing
+# https://www.unicode.org/Public/UCD/latest/ucd/Blocks.txt
 CJKBlockList = [
 	# Table 18-1. Blocks Containing Han Ideographs
 	(0x3400, 0x4DBF), # U+3400..U+4DBF CJK Unified Ideographs Extension A
@@ -125,6 +126,7 @@ CJKBlockList = [
 	(0x3190, 0x319F), # U+3190..U+319F Kanbun
 	(0x31F0, 0x31FF), # U+31F0..U+31FF Katakana Phonetic Extensions
 	(0xFF65, 0xFF9F), # U+FF65..U+FF9F Halfwidth Katakana
+	(0x1AFF0, 0x1AFFF), # U+1AFF0..U+1AFFF Kana Extended-B
 	(0x1B000, 0x1B0FF), # U+1B000..U+1B0FF Kana Supplement
 	(0x1B100, 0x1B12F), # U+1B100..U+1B12F Kana Extended-A
 	(0x1B130, 0x1B16F), # U+1B130..U+1B16F Small Kana Extension
@@ -143,6 +145,7 @@ CJKBlockList = [
 	(0x18D00, 0x18D8F), # U+18D00..U+18D8F Tangut Supplement
 	(0x18B00, 0x18CFF), # U+18B00..U+18CFF Khitan Small Script
 	(0x1B170, 0x1B2FF), # U+1B170..U+1B2FF Nüshu
+	# omitted: Lisu, Miao
 ]
 
 def findCategories(filename):
@@ -157,7 +160,7 @@ def isCJKCharacter(category, ch):
 		return False
 
 	for block in CJKBlockList:
-		if ch >= block[0] and ch <= block[1]:
+		if block[0] <= ch <= block[1]:
 			return True
 
 	return False
@@ -315,7 +318,8 @@ return nullptr;
 	Regenerate(filename, "//", output)
 
 def updateCharClassifyTable(filename, headfile):
-	indexTable = [0] * UnicodeCharacterCount
+	defaultValue = int(CharacterClass.Space)
+	indexTable = [defaultValue] * UnicodeCharacterCount
 	for ch in range(UnicodeCharacterCount):
 		uch = chr(ch)
 		category = unicodedata.category(uch)
@@ -326,6 +330,10 @@ def updateCharClassifyTable(filename, headfile):
 
 	output = [f"// Created with Python {platform.python_version()}, Unicode {unicodedata.unidata_version}"]
 	head_output = output[:]
+
+	tableSize = getMinTableSize(indexTable, defaultValue)
+	indexTable = indexTable[:tableSize]
+	print(f'Unicode CharClassify table size: {tableSize}, last value: {CharacterClass(indexTable[tableSize - 1]).name}')
 
 	valueBit, totalBit, data = runLengthEncode('CharClassify Unicode BMP', indexTable[:BMPCharacterCharacterCount])
 	assert valueBit == 3
@@ -344,12 +352,11 @@ def updateCharClassifyTable(filename, headfile):
 	if (ch < sizeof(classifyMap)) {
 		return static_cast<CharacterClass>(classifyMap[ch]);
 	}
-	if (ch > maxUnicode) {
-		// Cn
-		return CharacterClass::space;
+	if (ch >= maxUnicode) {
+		return CharacterClass::space; // Co, Cn
 	}
 
-	ch -= sizeof(classifyMap);""",
+	ch -= sizeof(classifyMap);""".replace('maxUnicode', hex(tableSize)),
 		'returnType': 'CharacterClass'
 	}
 
@@ -361,11 +368,38 @@ def updateCharClassifyTable(filename, headfile):
 	Regenerate(filename, "//", output)
 	Regenerate(headfile, "//", head_output)
 
+def readCharacterCategoryTable(categories):
+	# https://www.unicode.org/Public/UCD/latest/ucd/UnicodeData.txt
+	version, propertyList = readUnicodePropertyFile('UnicodeData.txt', propertyIndex=2, firstLast=1)
+	indexTable = ['Cn'] * UnicodeCharacterCount
+	flattenUnicodePropertyTable(indexTable, propertyList)
+	diff = {}
+	for index, cc in enumerate(indexTable):
+		indexTable[index] = categories.index(cc)
+		category = unicodedata.category(chr(index))
+		if cc != category:
+			key = (cc, category)
+			if key in diff:
+				prev = diff[key]
+				start, end = prev[-1]
+				if index - end == 1:
+					prev[-1] = (start, index)
+				else:
+					prev.append((index, index))
+			else:
+				diff[key] = [(index, index)]
+	for key, rangeList in diff.items():
+		line = ', '.join(f'{start:04X}..{end:04X}' for start, end in rangeList)
+		print(f'{key[0]} => {key[1]}: {line}')
+	return indexTable
+
 def updateCharacterCategoryTable(filename):
 	categories = findCategories("../lexlib/CharacterCategory.h")
 	output = [f"// Created with Python {platform.python_version()}, Unicode {unicodedata.unidata_version}"]
 
-	indexTable = [0] * UnicodeCharacterCount
+	# indexTable = readCharacterCategoryTable(categories)
+	defaultValue = categories.index('Cn')
+	indexTable = [defaultValue] * UnicodeCharacterCount
 	for ch in range(UnicodeCharacterCount):
 		uch = chr(ch)
 		category = unicodedata.category(uch)
@@ -373,7 +407,7 @@ def updateCharacterCategoryTable(filename):
 		indexTable[ch] = value
 
 	# the sentinel value is used to simplify CharacterMap::Optimize()
-	sentinel = UnicodeCharacterCount*32 + categories.index('Cn')
+	sentinel = UnicodeCharacterCount*32 + defaultValue
 	valueBit, rangeList = rangeEncode('catRanges', indexTable, sentinel=sentinel)
 	assert valueBit == 5
 	output.append("#if CharacterCategoryUseRangeList")
@@ -490,18 +524,18 @@ def isReservedOrUDC_GBK(ch, buf):
 	ch1 = buf[0]
 	ch2 = buf[1]
 	# user-defined 1 and 2
-	if ((ch1 >= 0xAA and ch1 <= 0xAF) or (ch1 >= 0xF8 and ch1 <= 0xFE)) \
-		and (ch2 >= 0xA1 and ch2 <= 0xFE):
+	if ((0xAA <= ch1 <= 0xAF) or (0xF8 <= ch1 <= 0xFE)) \
+		and (0xA1 <= ch2 <= 0xFE):
 		return True
 	# user-defined 3
-	if (ch1 >= 0xA1 and ch1 <= 0xA7) and (ch2 >= 0x40 and ch2 <= 0xA0 and ch2 != 0x7F):
+	if (0xA1 <= ch1 <= 0xA7) and ((0x40 <= ch2 <= 0xA0) and ch2 != 0x7F):
 		return True
 	return False
 
 # https://en.wikipedia.org/wiki/Big5
 def isReservedOrUDC_Big5(ch, buf):
 	for block in [(0x8140, 0xA0FE), (0xA3C0, 0xA3FE), (0xC6A1, 0xC8FE), (0xF9D6, 0xFEFE)]:
-		if ch >= block[0] and ch <= block[1]:
+		if block[0] <= ch <= block[1]:
 			return True
 	return False
 

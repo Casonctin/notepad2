@@ -1151,6 +1151,41 @@ bool Document::IsDBCSDualByteAt(Sci::Position pos) const noexcept {
 		&& IsDBCSTrailByteNoExcept(cb.UCharAt(pos + 1));
 }
 
+size_t Document::DiscardLastCombinedCharacter(const char *text, size_t lengthSegment, size_t lenBytes) noexcept {
+	const char *it = text + lengthSegment;
+	const char * const back = text + lenBytes;
+	// only find grapheme cluster boundary within last longest sequence
+	constexpr size_t longest = longestUnicodeCharacterSequenceBytes + UTF8MaxBytes;
+	const char * const end = (lengthSegment > longest) ? it - longest : text;
+	const char *prev = it;
+	GraphemeBreakProperty next = GraphemeBreakProperty::BackwardSentinel;
+	do {
+		// go back to the start of current character.
+		int trail = 1;
+		while (it != end && trail < UTF8MaxBytes && UTF8IsTrailByte(*it)) {
+			++trail;
+			--it;
+		}
+		// text may contains invalid UTF-8 when called from LineLayout::WrapLine()
+		const int utf8status = UTF8Classify(it, back - it);
+		if (utf8status & UTF8MaskInvalid) {
+			// treat invalid UTF-8 as control character represented with isolated bytes
+			lengthSegment = prev - text;
+			break;
+		}
+		const int character = UnicodeFromUTF8(reinterpret_cast<const unsigned char *>(it));
+		const GraphemeBreakProperty current = CharClassify::GetGraphemeBreakProperty(character);
+		if (IsGraphemeClusterBoundary(current, next)) {
+			lengthSegment = prev - text;
+			break;
+		}
+		next = current;
+		prev = it;
+		--it;
+	} while (it > end);
+	return lengthSegment;
+}
+
 // Need to break text into segments near end but taking into account the
 // encoding to not break inside a UTF-8 or DBCS character and also trying
 // to avoid breaking inside a pair of combining characters, or inside
@@ -1164,11 +1199,11 @@ bool Document::IsDBCSDualByteAt(Sci::Position pos) const noexcept {
 // In preference order from best to worst:
 //   1) Break before or after spaces or controls
 //   2) Break at word and punctuation boundary for better kerning and ligature support
-//   3) Break after whole character, this may break combining characters
+//   3) Break before letter in UTF-8 to avoid breaking combining characters
+//   4) Break after whole character, this may break combining characters
 
 size_t Document::SafeSegment(const char *text, size_t lengthSegment, EncodingFamily encodingFamily) const noexcept {
-	const char * const end = text + lengthSegment;
-	const char *it = end;
+	const char *it = text + lengthSegment;
 	// check space first as most written language use spaces.
 	do {
 		if (IsBreakSpace(*it)) {
@@ -1179,47 +1214,32 @@ size_t Document::SafeSegment(const char *text, size_t lengthSegment, EncodingFam
 
 	if (encodingFamily != EncodingFamily::dbcs) {
 		// backward iterate for UTF-8 and single byte encoding to find word and punctuation boundary.
-		it = end;
+		it = text + lengthSegment;
+		size_t lastPunctuationBreak = lengthSegment;
 		const CharacterClass ccPrev = charClass.GetClass(*it);
 		do {
 			--it;
-			const CharacterClass cc = charClass.GetClass(*it);
+			uint8_t ch = *it;
+			const CharacterClass cc = charClass.GetClass(ch);
 			if (cc != ccPrev) {
-				return it - text + 1;
+				lastPunctuationBreak = it - text + 1;
+				break;
 			}
 		} while (it != text);
 
-		it = end;
-		if (encodingFamily != EncodingFamily::eightBit && ccPrev == CharacterClass::word) {
-#if 0
-			// for UTF-8 go back to the start of last character.
-			for (int trail = 0; trail < UTF8MaxBytes - 1 && UTF8IsTrailByte(*it); trail++) {
-				--it;
-			}
-#else
+		if (ccPrev >= CharacterClass::punctuation && encodingFamily != EncodingFamily::eightBit) {
 			// for UTF-8 go back two code points to detect grapheme cluster boundary.
-			it -= 2*UTF8MaxBytes;
-			for (int tryCount = 0; tryCount < 2; tryCount++) {
-				// go back to the start of current character.
-				for (int trail = 0; trail < UTF8MaxBytes - 1 && UTF8IsTrailByte(*it); trail++) {
+			lastPunctuationBreak = DiscardLastCombinedCharacter(text, lastPunctuationBreak, lastPunctuationBreak + UTF8MaxBytes);
+			if (lastPunctuationBreak == lengthSegment) {
+				// discard trail bytes in last truncated character around lengthEachSubdivision
+				it = text + lengthSegment;
+				while (UTF8IsTrailByte(*it)) {
 					--it;
 				}
-				GraphemeBreakProperty prev = GraphemeBreakProperty::Sentinel;
-				do {
-					const int character = UnicodeFromUTF8(reinterpret_cast<const unsigned char *>(it));
-					const GraphemeBreakProperty current = CharClassify::GetGraphemeBreakProperty(character);
-					if (IsGraphemeClusterBoundary(prev, current)) {
-						return it - text;
-					}
-					prev = current;
-					it += UTF8BytesOfLead(static_cast<unsigned char>(*it));
-				} while (it < end);
-				// no boundary between last two code points, assume text ends with the longest sequence.
-				it -= longestUnicodeCharacterSequenceBytes + UTF8MaxBytes;
+				lastPunctuationBreak = it - text;
 			}
-#endif
 		}
-		return it - text;
+		return lastPunctuationBreak;
 	}
 
 	{

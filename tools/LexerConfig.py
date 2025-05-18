@@ -49,6 +49,8 @@ plain_text_file: treat as plain text file for auto-completion.
 plain_text_style: plain text styles for auto-completion.
 string_style_range: first and last string or regex style for auto-completion.
 string_style_list: string or regex styles for auto-completion.
+
+code_pretty: supports code compress and pretty.
 """
 
 from enum import IntFlag
@@ -67,6 +69,7 @@ class LexerAttr(IntFlag):
 	CharacterPrefix = 1 << 9		# character_prefix
 	EscapePunctuation = 1 << 10		# escape_punctuation
 	PlainTextFile = 1 << 11			# plain_text_file
+	CodePretty = 1 << 12			# code_pretty
 
 class KeywordAttr(IntFlag):
 	Default = 0
@@ -360,6 +363,7 @@ LexerConfigMap = {
 		'extra_word_char': '-$@',
 		#'ignore_word_style': ['SCE_CSS_PROPERTY', 'SCE_CSS_PSEUDOCLASS', 'SCE_CSS_PSEUDOELEMENT'],
 		'string_style_range': ['SCE_CSS_ESCAPECHAR', 'SCE_CSS_URL'],
+		'code_pretty': True,
 	},
 
 	'NP2LEX_DLANG': {
@@ -593,6 +597,7 @@ LexerConfigMap = {
 		'extra_word_char': '$#@',
 		#'ignore_word_style': ['SCE_JS_WORD', 'SCE_JS_WORD2', 'SCE_JS_DIRECTIVE'],
 		'string_style_range': ['SCE_JSX_TEXT', 'SCE_JS_ESCAPECHAR'],
+		'code_pretty': True,
 	},
 	'NP2LEX_JSON': {
 		'tab_settings': TabSettings_Space2,
@@ -603,6 +608,7 @@ LexerConfigMap = {
 		'operator_style': ['SCE_JSON_OPERATOR'],
 		#'ignore_word_style': ['SCE_JSON_KEYWORD'],
 		'string_style_range': ['SCE_JSON_STRING_DQ', 'SCE_JSON_ESCAPECHAR'],
+		'code_pretty': True,
 	},
 	'NP2LEX_JULIA': {
 		'line_comment_string': '#',
@@ -814,7 +820,7 @@ LexerConfigMap = {
 		'string_style_range': ['SCE_PHP_ESCAPECHAR', 'SCE_PHP_NOWDOC_ID'],
 		'string_style_list': ['SCE_H_DOUBLESTRING', 'SCE_H_SINGLESTRING', 'SCE_H_SGML_DOUBLESTRING', 'SCE_H_SGML_SIMPLESTRING',
 			'js_style(SCE_JS_STRING_SQ)', 'js_style(SCE_JS_STRING_DQ)',
-			'js_style(SCE_JS_STRING_BT)', 'js_style(SCE_JS_REGEX)', 'js_style(SCE_JS_ESCAPECHAR)',
+			'js_style(SCE_JS_TEMPLATELITERAL)', 'js_style(SCE_JS_REGEX)', 'js_style(SCE_JS_ESCAPECHAR)',
 			'css_style(SCE_CSS_ESCAPECHAR)', 'css_style(SCE_CSS_STRING_SQ)', 'css_style(SCE_CSS_STRING_DQ)', 'css_style(SCE_CSS_URL)'],
 		'plain_text_style': ['SCE_H_DEFAULT'],
 	},
@@ -842,7 +848,7 @@ LexerConfigMap = {
 		'printf_format_specifier': True,
 		'format_specifier_style': 'SCE_PY_FORMAT_SPECIFIER',
 		'escape_char_style': 'SCE_PY_ESCAPECHAR',
-		'character_prefix': ['r', 'b', 'f', 'u', 'R', 'B', 'F', 'U'],
+		'character_prefix': ['r', 'b', 'f', 't', 'u', 'R', 'B', 'F', 'T', 'U'],
 		'raw_string_style': ['SCE_PY_RAWSTRING_SQ', 'SCE_PY_RAWSTRING_DQ',
 			'SCE_PY_TRIPLE_RAWSTRING_SQ', 'SCE_PY_TRIPLE_RAWSTRING_DQ',
 			'SCE_PY_RAWFMTSTRING_SQ', 'SCE_PY_RAWFMTSTRING_DQ',
@@ -1281,6 +1287,8 @@ def BuildLexerConfigContent(rid, keywordAttr):
 		flag |= LexerAttr.EscapePunctuation
 	if config.get('plain_text_file', None):
 		flag |= LexerAttr.PlainTextFile
+	if config.get('code_pretty', None):
+		flag |= LexerAttr.CodePretty
 
 	output = []
 	indent = '\t\t'
