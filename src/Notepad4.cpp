@@ -18,7 +18,6 @@
 *
 ******************************************************************************/
 
-struct IUnknown;
 #include <windows.h>
 #include <windowsx.h>
 #include <shlwapi.h>
@@ -2521,6 +2520,7 @@ void MsgInitMenu(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 	CheckCmd(hmenu, IDM_SET_MULTIPLE_SELECTION, iSelectOption & SelectOption_EnableMultipleSelection);
 	CheckCmd(hmenu, IDM_SET_SELECTIONASFINDTEXT, iSelectOption & SelectOption_CopySelectionAsFindText);
 	CheckCmd(hmenu, IDM_SET_PASTEBUFFERASFINDTEXT, iSelectOption & SelectOption_CopyPasteBufferAsFindText);
+	CheckCmd(hmenu, IDM_SET_UNDO_REDO_SELECTION, iSelectOption & SelectOption_UndoRedoRememberSelection);
 	i = IDM_LINE_SELECTION_MODE_NONE + iLineSelectionMode;
 	CheckMenuRadioItem(hmenu, IDM_LINE_SELECTION_MODE_NONE, IDM_LINE_SELECTION_MODE_OLDVS, i, MF_BYCOMMAND);
 
@@ -2570,14 +2570,12 @@ void MsgInitMenu(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept {
 	CheckMenuRadioItem(hmenu, IDM_VIEW_SCROLLPASTLASTLINE_ONE, IDM_VIEW_SCROLLPASTLASTLINE_QUARTER, i, MF_BYCOMMAND);
 
 	// Rendering Technology
-	i = IsVistaAndAbove();
-	EnableCmd(hmenu, IDM_SET_RENDER_TECH_D2D, i);
-	EnableCmd(hmenu, IDM_SET_RENDER_TECH_D2DRETAIN, i);
-	EnableCmd(hmenu, IDM_SET_RENDER_TECH_D2DDC, i);
-	EnableCmd(hmenu, IDM_SET_USE_XP_FILE_DIALOG, i);
+#if _WIN32_WINNT < _WIN32_WINNT_WIN7
+	DisableCmd(hmenu, IDM_SET_RENDER_TECH_D3D, true);
+#endif
 	CheckCmd(hmenu, IDM_SET_USE_XP_FILE_DIALOG, bUseXPFileDialog);
 	i = IDM_SET_RENDER_TECH_GDI + iRenderingTechnology;
-	CheckMenuRadioItem(hmenu, IDM_SET_RENDER_TECH_GDI, IDM_SET_RENDER_TECH_D2DDC, i, MF_BYCOMMAND);
+	CheckMenuRadioItem(hmenu, IDM_SET_RENDER_TECH_GDI, IDM_SET_RENDER_TECH_D3D, i, MF_BYCOMMAND);
 	// RTL Layout
 	CheckCmd(hmenu, IDM_SET_RTL_LAYOUT_EDIT, bEditLayoutRTL);
 	CheckCmd(hmenu, IDM_SET_RTL_LAYOUT_OTHER, bWindowLayoutRTL);
@@ -3938,7 +3936,8 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 
 	case IDM_SET_MULTIPLE_SELECTION:
 	case IDM_SET_SELECTIONASFINDTEXT:
-	case IDM_SET_PASTEBUFFERASFINDTEXT: {
+	case IDM_SET_PASTEBUFFERASFINDTEXT:
+	case IDM_SET_UNDO_REDO_SELECTION: {
 		const int option = 1 << (LOWORD(wParam) - IDM_SET_MULTIPLE_SELECTION);
 		if (iSelectOption & option) {
 			iSelectOption &= ~option;
@@ -3947,6 +3946,8 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 		}
 		if (option == SelectOption_EnableMultipleSelection) {
 			SciCall_SetMultipleSelection(iSelectOption & SelectOption_EnableMultipleSelection);
+		} else if (option == SelectOption_UndoRedoRememberSelection) {
+			SciCall_SetUndoSelectionHistory((iSelectOption & SelectOption_UndoRedoRememberSelection) ? (SC_UNDO_SELECTION_HISTORY_ENABLED | SC_UNDO_SELECTION_HISTORY_SCROLL): SC_UNDO_SELECTION_HISTORY_DISABLED);
 		}
 	} break;
 
@@ -4214,7 +4215,8 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 	case IDM_SET_RENDER_TECH_GDI:
 	case IDM_SET_RENDER_TECH_D2D:
 	case IDM_SET_RENDER_TECH_D2DRETAIN:
-	case IDM_SET_RENDER_TECH_D2DDC: {
+	case IDM_SET_RENDER_TECH_D2DDC:
+	case IDM_SET_RENDER_TECH_D3D: {
 		const int back = iRenderingTechnology;
 		iRenderingTechnology = LOWORD(wParam) - IDM_SET_RENDER_TECH_GDI;
 		SciCall_SetTechnology(iRenderingTechnology);
