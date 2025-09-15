@@ -70,7 +70,7 @@ static UINT uTrayIconDPI = 0;
 #define CallTipDefaultMouseDwellTime	250
 
 #define TOOLBAR_COMMAND_BASE	IDT_FILE_NEW
-#define DefaultToolbarButtons	L"22 3 0 1 2 0 4 18 19 0 5 6 0 7 8 9 20 0 10 11 0 12 0 24 0 13 14 0 15 16 0 17"
+#define DefaultToolbarButtons	L"22 3 0 1 27 2 0 4 18 19 0 5 6 0 7 8 9 20 0 10 11 0 12 0 24 0 13 14 0 15 16 0 17"
 static TBBUTTON tbbMainWnd[] = {
 	{0, 	0, 					0, 				 TBSTYLE_SEP, {0}, 0, 0},
 	{0, 	IDT_FILE_NEW, 		TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
@@ -99,6 +99,7 @@ static TBBUTTON tbbMainWnd[] = {
 	{23, 	IDT_VIEW_TOGGLEFOLDS, 	TBSTATE_ENABLED, BTNS_DROPDOWN, {0}, 0, 0},
 	{24, 	IDT_FILE_LAUNCH, 	TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
 	{25, 	IDT_VIEW_ALWAYSONTOP, 	TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
+	{26, 	IDT_FILE_NEWWINDOW, 	TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
 };
 
 WCHAR	szIniFile[MAX_PATH] = L"";
@@ -431,15 +432,6 @@ static inline void InvalidateStyleRedraw() noexcept {
 	SciCall_SetViewEOL(bViewEOLs);
 }
 
-// temporary fix for https://github.com/zufuliu/notepad4/issues/134: Direct2D on arm32
-static inline int GetDefualtRenderingTechnology() noexcept {
-#if defined(__arm__) || defined(_ARM_) || defined(_M_ARM)
-	return SC_TECHNOLOGY_DIRECTWRITERETAIN;
-#else
-	return IsVistaAndAbove()? SC_TECHNOLOGY_DIRECTWRITE : SC_TECHNOLOGY_DEFAULT;
-#endif
-}
-
 //=============================================================================
 //
 // WinMain()
@@ -623,7 +615,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
 #endif
 
 	// we need DPI-related functions before create Scintilla window.
-#if NP2_HAS_GETDPIFORWINDOW
+#if _WIN32_WINNT >= _WIN32_WINNT_WIN10
 	g_uSystemDPI = GetDpiForSystem();
 #else
 	Scintilla_LoadDpiForWindow();
@@ -1924,7 +1916,11 @@ void CreateBars(HWND hwnd, HINSTANCE hInstance) noexcept {
 
 	if (internalBitmap) {
 		HBITMAP hbmpCopy = static_cast<HBITMAP>(CopyImage(hbmp, IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION));
+		// StopWatch watch;
+		// watch.Start();
 		const bool fProcessed = BitmapAlphaBlend(hbmpCopy, GetSysColor(COLOR_3DFACE), 0x60);
+		// watch.Stop();
+		// watch.ShowLog("BitmapAlphaBlend");
 		if (fProcessed) {
 			himl = ImageList_Create(bmp.bmHeight, bmp.bmHeight, ILC_COLOR32 | ILC_MASK, 0, 0);
 			ImageList_AddMasked(himl, hbmpCopy, CLR_DEFAULT);
@@ -2739,8 +2735,9 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 
 	case IDM_FILE_NEWWINDOW:
 	case IDM_FILE_NEWWINDOW2:
+	case IDT_FILE_NEWWINDOW:
 	case IDM_FILE_RESTART: {
-		const bool emptyWind = LOWORD(wParam) == IDM_FILE_NEWWINDOW2;
+		const bool emptyWind = LOWORD(wParam) == IDM_FILE_NEWWINDOW || LOWORD(wParam) == IDT_FILE_NEWWINDOW;
 		if (!emptyWind && bSaveBeforeRunningTools && !FileSave(FileSaveFlag_Ask)) {
 			break;
 		}
@@ -2841,6 +2838,7 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 		SHFILEINFO shfi;
 		WCHAR *pszTitle;
 		WCHAR tchUntitled[128];
+		const auto action = (LOWORD(wParam) == IDM_FILE_PRINT)? static_cast<NotepadReplacementAction>(lParam) : NotepadReplacementAction_None;
 
 		if (StrNotEmpty(szCurFile)) {
 			SHGetFileInfo2(szCurFile, 0, &shfi, sizeof(SHFILEINFO), SHGFI_DISPLAYNAME);
@@ -2850,9 +2848,9 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 			pszTitle = tchUntitled;
 		}
 
-		if (!EditPrint(hwndEdit, pszTitle, lParam & TRUE)) {
+		if (!EditPrint(hwndEdit, pszTitle, static_cast<int>(action) & TRUE)) {
 			MsgBoxWarn(MB_OK, IDS_PRINT_ERROR, pszTitle);
-		} else if (lParam) {
+		} else if (action > NotepadReplacementAction_Default) {
 			SendWMCommand(hwnd, IDM_FILE_EXIT);
 		}
 	}
@@ -3020,7 +3018,7 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 		break;
 
 	case IDM_ENCODING_SETDEFAULT:
-		SelectDefEncodingDlg(hwnd, &iDefaultEncoding);
+		SelectDefEncodingDlg(hwnd);
 		break;
 
 	case IDM_LINEENDINGS_CRLF:
@@ -3032,7 +3030,7 @@ LRESULT MsgCommand(HWND hwnd, WPARAM wParam, LPARAM lParam) {
 	break;
 
 	case IDM_LINEENDINGS_SETDEFAULT:
-		SelectDefLineEndingDlg(hwnd, &iDefaultEOLMode);
+		SelectDefLineEndingDlg(hwnd);
 		break;
 
 	case IDT_EDIT_UNDO:
@@ -5324,8 +5322,8 @@ void LoadSettings() noexcept {
 	bEditLayoutRTL = section.GetBool(L"EditLayoutRTL", false);
 	bWindowLayoutRTL = section.GetBool(L"WindowLayoutRTL", false);
 
-	iValue = section.GetInt(L"RenderingTechnology", GetDefualtRenderingTechnology());
-	iValue = clamp(iValue, SC_TECHNOLOGY_DEFAULT, SC_TECHNOLOGY_DIRECTWRITEDC);
+	iValue = section.GetInt(L"RenderingTechnology", SC_TECHNOLOGY_DIRECTWRITE);
+	iValue = clamp(iValue, SC_TECHNOLOGY_DEFAULT, SC_TECHNOLOGY_DIRECT_WRITE_1);
 	iRenderingTechnology = bEditLayoutRTL ? SC_TECHNOLOGY_DEFAULT : iValue;
 
 	iValue = section.GetInt(L"Bidirectional", SC_BIDIRECTIONAL_DISABLED);
@@ -5592,7 +5590,7 @@ void SaveSettings(bool bSaveSettingsNow) noexcept {
 	section.SetIntEx(L"EndAtLastLine", iEndAtLastLine, 1);
 	section.SetBoolEx(L"EditLayoutRTL", bEditLayoutRTL, false);
 	section.SetBoolEx(L"WindowLayoutRTL", bWindowLayoutRTL, false);
-	section.SetIntEx(L"RenderingTechnology", iRenderingTechnology, GetDefualtRenderingTechnology());
+	section.SetIntEx(L"RenderingTechnology", iRenderingTechnology, SC_TECHNOLOGY_DIRECTWRITE);
 	section.SetIntEx(L"Bidirectional", iBidirectional, SC_BIDIRECTIONAL_DISABLED);
 	section.SetIntEx(L"FontQuality", iFontQuality, SC_EFF_QUALITY_LCD_OPTIMIZED);
 	iValue = static_cast<int>(iCaretStyle) + static_cast<int>(bBlockCaretForOVRMode)*10 + static_cast<int>(bBlockCaretOutSelection)*100;
@@ -7238,8 +7236,7 @@ bool FileLoad(FileLoadFlag loadFlag, LPCWSTR lpszFile) {
 			// diff/patch file may contain content from files with different line endings.
 			status.bLineEndingsDefaultNo = bUnknownFile || pLexCurrent->iLexer == SCLEX_DIFF;
 			if (WarnLineEndingDlg(hwndMain, &status)) {
-				const int iNewEOLMode = GetScintillaEOLMode(status.iEOLMode);
-				ConvertLineEndings(iNewEOLMode);
+				ConvertLineEndings(status.iEOLMode);
 			}
 		}
 	} else if (!status.bFileTooBig) {
